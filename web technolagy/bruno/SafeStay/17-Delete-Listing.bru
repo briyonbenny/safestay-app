@@ -1,0 +1,11 @@
+meta {
+  name: Delete Listing Owner
+  type: http
+  seq: 17
+}
+
+delete {
+  url: {{baseUrl}}/api/listings/{{listingId}}
+  body: none
+  auth: none
+}

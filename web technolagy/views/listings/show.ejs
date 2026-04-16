@@ -1,0 +1,26 @@
+<%- include("../partials/header") %>
+<div class="card">
+  <h2><%= listing.title %></h2>
+  <p><strong>Location:</strong> <%= listing.location %></p>
+  <p><strong>Price:</strong> EUR <%= listing.price %></p>
+  <p><strong>Property Type:</strong> <%= listing.propertyType %></p>
+  <p><strong>Description:</strong> <%= listing.description %></p>
+  <p><strong>Verified:</strong> <%= listing.isVerified ? "Yes" : "No" %></p>
+  <p><strong>Owner:</strong> <%= listing.owner ? listing.owner.fullName : "Unknown" %></p>
+</div>
+
+<% if (currentUser) { %>
+  <form method="POST" action="/listings/<%= listing._id %>/favourite" class="inline">
+    <button type="submit"><%= isFavourite ? "Remove Favourite" : "Save Favourite" %></button>
+  </form>
+
+  <% const ownerRef = listing.owner && (listing.owner._id != null ? listing.owner._id : listing.owner); %>
+  <% if (currentUser.role === "owner" && ownerRef && String(ownerRef) === String(currentUser.id)) { %>
+    <a href="/listings/<%= listing._id %>/edit">Edit</a>
+    <form method="POST" action="/listings/<%= listing._id %>?_method=DELETE" class="inline">
+      <button type="submit">Delete</button>
+    </form>
+  <% } %>
+<% } %>
+
+<%- include("../partials/footer") %>
