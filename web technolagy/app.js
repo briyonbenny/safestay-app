@@ -32,6 +32,11 @@ if (!mongoUri) {
   process.exit(1);
 }
 
+// First route: no body parsing, no static, no session — keeps Render / load-balancer checks fast.
+app.get("/health", (req, res) => {
+  res.status(200).json({ ok: true, app: "SafeStay API" });
+});
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
@@ -57,10 +62,6 @@ function registerRoutes() {
     }
     res.set("Cache-Control", "no-store, private, must-revalidate");
     next();
-  });
-
-  app.get("/health", (req, res) => {
-    res.status(200).json({ ok: true, app: "SafeStay API" });
   });
 
   app.get("/", (req, res) => {
@@ -126,6 +127,6 @@ async function start() {
 }
 
 start().catch((err) => {
-  console.error("Failed to start server:", err);
+  console.error("Failed to start server:", err && err.stack ? err.stack : err);
   process.exit(1);
 });
