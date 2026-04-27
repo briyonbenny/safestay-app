@@ -93,16 +93,28 @@ function registerRoutes() {
   });
 }
 
+function createSessionStore() {
+  const ttl = 60 * 60 * 24; // 1 day in seconds
+  const base = { collectionName: "sessions", ttl };
+  const client =
+    typeof mongoose.connection.getClient === "function" ? mongoose.connection.getClient() : null;
+  const dbName = mongoose.connection.db && mongoose.connection.db.databaseName;
+  if (client && dbName) {
+    return MongoStore.create({ ...base, client, dbName });
+  }
+  // getClient() can be missing in some driver/Mongoose combos — connect-mongo needs a real mongoUrl
+  if (!mongoUri) {
+    throw new Error("MONGODB_URI is required to create the session store.");
+  }
+  // eslint-disable-next-line no-console
+  console.warn("session store: using mongoUrl (Mongoose client not exposed); extra DB connection to Atlas");
+  return MongoStore.create({ ...base, mongoUrl: mongoUri });
+}
+
 async function start() {
-  // One Mongo connection: sessions use the same client as Mongoose (fewer TLS issues on Render).
   await connectDatabase();
 
-  const sessionStore = MongoStore.create({
-    client: mongoose.connection.getClient(),
-    dbName: mongoose.connection.db.databaseName,
-    collectionName: "sessions",
-    ttl: 60 * 60 * 24, // 1 day in seconds
-  });
+  const sessionStore = createSessionStore();
 
   app.use(
     session({
