@@ -13,7 +13,9 @@ async function connectDatabase() {
       throw new Error('MONGODB_URI must start with "mongodb://" or "mongodb+srv://".');
     }
 
-    await mongoose.connect(mongoUri);
+    await mongoose.connect(mongoUri, {
+      serverSelectionTimeoutMS: 20000,
+    });
     // eslint-disable-next-line no-console
     console.log("MongoDB connected successfully.");
   } catch (error) {
