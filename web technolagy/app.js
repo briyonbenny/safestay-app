@@ -18,10 +18,6 @@ const { attachCurrentUser } = require("./middleware/auth");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Connect to MongoDB at server start.
-connectDatabase();
-
-// Parse incoming form and JSON payloads.
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
@@ -68,7 +64,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health endpoint helps with Render deployment checks.
+
 app.get("/health", (req, res) => {
   res.status(200).json({ ok: true, app: "SafeStay API" });
 });
@@ -81,7 +77,7 @@ app.get("/", (req, res) => {
 app.use("/auth", authRoutes);
 app.use("/listings", listingRoutes);
 
-// JSON API routes (session cookies; no JWT). Used for Bruno / Postman tests.
+
 app.get("/api", (req, res) => {
   res.status(200).json({
     name: "SafeStay API",
@@ -92,7 +88,7 @@ app.get("/api", (req, res) => {
 app.use("/api/auth", apiAuthRoutes);
 app.use("/api/listings", apiListingRoutes);
 
-// Basic fallback for unknown pages.
+
 app.use((req, res) => {
   const pathOnly = (req.originalUrl || req.url || "").split("?")[0];
   if (pathOnly.startsWith("/api")) {
@@ -104,7 +100,13 @@ app.use((req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`SafeStay server running on http://localhost:${PORT}`);
-});
+connectDatabase()
+  .then(() => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`SafeStay server listening on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Failed to start server:", err.message);
+    process.exit(1);
+  });
