@@ -10,6 +10,28 @@ import {
 const FAV_KEY = 'safestay_favourites_v1';
 const USER_KEY = 'safestay_session_v1';
 const ROLES_KEY = 'safestay_account_roles_v1';
+/** When not using the Node API, keep listings in localStorage so refresh keeps your properties. */
+const MOCK_LISTINGS_KEY = 'safestay_listings_v1';
+
+const loadMockListingsFromStorage = () => {
+  try {
+    const raw = localStorage.getItem(MOCK_LISTINGS_KEY);
+    if (raw) {
+      const a = JSON.parse(raw);
+      if (Array.isArray(a) && a.length > 0) return a;
+    }
+  } catch {
+    /* */
+  }
+  return seedListings();
+};
+
+const listingsSafeForStorage = (rows) =>
+  rows.map((l) => ({
+    ...l,
+    // blob: URLs are invalid after reload; do not persist them
+    images: Array.isArray(l.images) ? l.images.filter((u) => u && !String(u).startsWith('blob:')) : [],
+  }));
 
 const loadRoles = () => {
   try {
@@ -37,7 +59,7 @@ const SafeStayContext = createContext(null);
 
 export const SafeStayProvider = ({ children }) => {
   const apiMode = isApiModeEnabled();
-  const [listings, setListings] = useState(() => (apiMode ? [] : seedListings()));
+  const [listings, setListings] = useState(() => (apiMode ? [] : loadMockListingsFromStorage()));
   const [user, setUser] = useState(() => readSession());
   const [apiReady, setApiReady] = useState(!apiMode);
   const [favouriteIds, setFavouriteIds] = useState(() => {
@@ -122,6 +144,15 @@ export const SafeStayProvider = ({ children }) => {
       /* storage */
     }
   }, [favouriteIds]);
+
+  useEffect(() => {
+    if (isApiModeEnabled()) return;
+    try {
+      localStorage.setItem(MOCK_LISTINGS_KEY, JSON.stringify(listingsSafeForStorage(listings)));
+    } catch {
+      /* storage */
+    }
+  }, [listings]);
 
   const addListing = useCallback(
     async (payload) => {
