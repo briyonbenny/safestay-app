@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSafeStay } from '../context/SafeStayContext.jsx';
 import { validatePrice, validateRequired } from '../utils/validation.js';
+import { isApiModeEnabled } from '../api/safeStayApi.js';
 
 const TYPES = ['Room', 'Apartment', 'Studio', 'House'];
 
@@ -12,7 +13,7 @@ const PREFILL_DESC =
   'Furnished single room in a quiet home. 15 minutes to campus by bus, shared living room and high-speed internet.';
 
 /**
- * VIEW: New property. Preview updates as you type. addListing() adds to the shared list in this app.
+ * VIEW: New property. Optional photos (up to 8) when using the real API; mock can attach previews.
  */
 export const CreateListingPage = () => {
   const { user, addListing } = useSafeStay();
@@ -22,6 +23,8 @@ export const CreateListingPage = () => {
   const [propertyType, setPropertyType] = useState('Room');
   const [price, setPrice] = useState(PREFILL_PRICE);
   const [description, setDescription] = useState(PREFILL_DESC);
+  const [isVerified, setIsVerified] = useState(false);
+  const [files, setFiles] = useState([]);
   const [error, setError] = useState('');
   const [showPreview, setShowPreview] = useState(true);
 
@@ -37,7 +40,16 @@ export const CreateListingPage = () => {
     );
   }
 
-  const onSubmit = (e) => {
+  const onFileChange = (e) => {
+    const list = e.target?.files;
+    if (!list || !list.length) {
+      setFiles([]);
+      return;
+    }
+    setFiles(Array.from(list).slice(0, 8));
+  };
+
+  const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
@@ -61,20 +73,41 @@ export const CreateListingPage = () => {
       setError(p.message);
       return;
     }
-    const created = addListing({
-      title: t.value,
-      location: l.value,
-      propertyType,
-      description: d.value,
-      price: p.value,
-    });
-    nav(`/listings/${created.id}`);
+
+    try {
+      if (isApiModeEnabled()) {
+        const created = await addListing({
+          title: t.value,
+          location: l.value,
+          propertyType,
+          description: d.value,
+          price: p.value,
+          isVerified,
+          imageFiles: files,
+        });
+        if (created?.id) nav(`/listings/${created.id}`);
+        return;
+      }
+
+      const imagePreviewUrls = files.length ? files.map((f) => URL.createObjectURL(f)) : [];
+      const created = await addListing({
+        title: t.value,
+        location: l.value,
+        propertyType,
+        description: d.value,
+        price: p.value,
+        imagePreviewUrls,
+      });
+      if (created?.id) nav(`/listings/${created.id}`);
+    } catch (err) {
+      setError(err && err.message ? err.message : 'Could not publish listing.');
+    }
   };
 
   return (
     <div className="page form-page create-page">
       <h1>Add a property</h1>
-      <p className="form-page__intro">Fields below are pre-filled with an example. Edit and publish to add this listing to SafeStay.</p>
+      <p className="form-page__intro">Fields below are pre-filled with an example. You can add photos of the property{isApiModeEnabled() ? ' (uploaded to the server)' : ' (preview only in demo mode)'}.</p>
       <label className="inline toggle-preview">
         <input
           type="checkbox"
@@ -121,6 +154,20 @@ export const CreateListingPage = () => {
               onChange={(e) => setDescription(e.target.value)}
             />
           </label>
+          <label className="field">
+            <span>Photos (optional, up to 8 — JPEG, PNG, GIF, WebP)</span>
+            <input type="file" accept="image/*" multiple onChange={onFileChange} />
+          </label>
+          {isApiModeEnabled() && (
+            <label className="field inline">
+              <input
+                type="checkbox"
+                checked={isVerified}
+                onChange={() => setIsVerified((v) => !v)}
+              />
+              <span> Mark as verified (optional)</span>
+            </label>
+          )}
           {error && (
             <p className="form-error" role="alert">
               {error}
@@ -140,6 +187,15 @@ export const CreateListingPage = () => {
             <p className="preview-price">
               {price ? `€${price}/mo` : 'Set a price (€/month)'}
             </p>
+            {files[0] && (
+              <p>
+                <img
+                  src={URL.createObjectURL(files[0])}
+                  alt=""
+                  style={{ maxWidth: '100%', borderRadius: 8, marginTop: 8 }}
+                />
+              </p>
+            )}
             <p className="preview-body">{description || 'Description will appear here.'}</p>
           </aside>
         )}

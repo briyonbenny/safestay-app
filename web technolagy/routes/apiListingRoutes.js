@@ -4,6 +4,7 @@ const Listing = require("../models/Listing");
 const User = require("../models/User");
 const { requireAuthApi, requireRoleApi, normaliseRole } = require("../middleware/auth");
 const { validateListing } = require("../middleware/validation");
+const { upload, uploadPathsFromFiles } = require("../config/listingUpload");
 
 const router = express.Router();
 
@@ -23,6 +24,7 @@ function listingToJson(doc) {
     propertyType: o.propertyType,
     description: o.description,
     isVerified: Boolean(o.isVerified),
+    images: Array.isArray(o.images) ? o.images : [],
     owner: o.owner
       ? typeof o.owner === "object"
         ? { id: String(o.owner._id || o.owner), fullName: o.owner.fullName, email: o.owner.email }
@@ -80,37 +82,67 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Only property owners may create listings (role-based access control).
-router.post("/", requireAuthApi, requireRoleApi("owner"), async (req, res) => {
-  const live = await User.findById(req.session.user.id).select("role").lean();
-  if (!live || normaliseRole(live.role) !== "owner") {
-    return res.status(403).json({ error: "Only property owners can create listings." });
-  }
-
-  const payload = normaliseListingPayload(req.body);
-  const errors = validateListing(payload);
-  if (errors.length > 0) {
-    return res.status(400).json({ errors });
-  }
-
+// Logged-in owner: only listings you created.
+router.get("/mine", requireAuthApi, requireRoleApi("owner"), async (req, res) => {
   try {
-    const listing = await Listing.create({
-      title: String(payload.title).trim(),
-      location: String(payload.location).trim(),
-      price: Number(payload.price),
-      propertyType: String(payload.propertyType).trim(),
-      description: String(payload.description).trim(),
-      isVerified: Boolean(payload.isVerified),
-      owner: req.session.user.id,
-    });
-    const populated = await Listing.findById(listing._id).populate("owner", "fullName email");
-    return res.status(201).json({ ok: true, listing: listingToJson(populated) });
+    const listings = await Listing.find({ owner: req.session.user.id })
+      .populate("owner", "fullName email")
+      .sort({ createdAt: -1 });
+    return res.status(200).json({ listings: listings.map((d) => listingToJson(d)) });
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error("API create listing error:", err.message);
-    return res.status(500).json({ error: "Could not create listing." });
+    console.error("API my listings error:", err.message);
+    return res.status(500).json({ error: "Could not load your listings." });
   }
 });
+
+// Only property owners may create listings. multipart: fields + files field name "images".
+router.post(
+  "/",
+  requireAuthApi,
+  requireRoleApi("owner"),
+  (req, res, next) => {
+    upload.array("images", 8)(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({ error: err.message || "Image upload failed." });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    const live = await User.findById(req.session.user.id).select("role").lean();
+    if (!live || normaliseRole(live.role) !== "owner") {
+      return res.status(403).json({ error: "Only property owners can create listings." });
+    }
+
+    const payload = normaliseListingPayload(req.body);
+    const errors = validateListing(payload);
+    if (errors.length > 0) {
+      return res.status(400).json({ errors });
+    }
+
+    const imagePaths = uploadPathsFromFiles(req);
+
+    try {
+      const listing = await Listing.create({
+        title: String(payload.title).trim(),
+        location: String(payload.location).trim(),
+        price: Number(payload.price),
+        propertyType: String(payload.propertyType).trim(),
+        description: String(payload.description).trim(),
+        isVerified: Boolean(payload.isVerified),
+        owner: req.session.user.id,
+        images: imagePaths,
+      });
+      const populated = await Listing.findById(listing._id).populate("owner", "fullName email");
+      return res.status(201).json({ ok: true, listing: listingToJson(populated) });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("API create listing error:", err.message);
+      return res.status(500).json({ error: "Could not create listing." });
+    }
+  }
+);
 
 router.get("/:id", async (req, res) => {
   try {

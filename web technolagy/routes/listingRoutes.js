@@ -4,6 +4,7 @@ const Listing = require("../models/Listing");
 const User = require("../models/User");
 const { requireAuth, requireRole, normaliseRole } = require("../middleware/auth");
 const { validateListing } = require("../middleware/validation");
+const { upload, uploadPathsFromFiles } = require("../config/listingUpload");
 
 const router = express.Router();
 
@@ -42,45 +43,88 @@ router.get("/new", requireAuth, requireRole("owner"), (req, res) => {
   res.render("listings/new", { errors: [], old: {} });
 });
 
-// Create listing (property owners only).
-router.post("/", requireAuth, requireRole("owner"), async (req, res) => {
-  const live = await User.findById(req.session.user.id).select("role").lean();
-  if (!live || normaliseRole(live.role) !== "owner") {
-    req.session.flashError = "Only property owners can create listings.";
-    return res.redirect("/listings");
-  }
-
-  const errors = validateListing(req.body);
-  if (errors.length > 0) {
-    return res.status(400).render("listings/new", { errors, old: req.body });
-  }
-
-  if (!req.session.user || !req.session.user.id) {
-    req.session.flashError = "Your session expired. Please log in again.";
-    return res.redirect("/auth/login");
-  }
-
+// Owner: listings this user created (before /:id so "mine" is not taken as an id).
+router.get("/mine", requireAuth, requireRole("owner"), async (req, res) => {
   try {
-    await Listing.create({
-      title: req.body.title.trim(),
-      location: req.body.location.trim(),
-      price: Number(req.body.price),
-      propertyType: req.body.propertyType.trim(),
-      description: req.body.description.trim(),
-      isVerified: req.body.isVerified === "on",
-      owner: req.session.user.id,
-    });
+    const listings = await Listing.find({ owner: req.session.user.id })
+      .populate("owner", "fullName email")
+      .sort({ createdAt: -1 });
+    return res.render("listings/mine", { listings });
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error("Create listing failed:", err.message);
-    return res.status(500).render("listings/new", {
-      errors: ["Could not save listing. Please try again. If this continues, log out and log in again."],
-      old: req.body,
+    console.error("my listings view error:", err.message);
+    return res.status(500).render("partials/message", {
+      title: "Error",
+      message: "Could not load your listings.",
     });
   }
-
-  return res.redirect("/listings");
 });
+
+// Create listing (property owners only). multipart for optional images.
+router.post(
+  "/",
+  requireAuth,
+  requireRole("owner"),
+  (req, res, next) => {
+    upload.array("images", 8)(req, res, (err) => {
+      if (err) {
+        return res.status(400).render("listings/new", {
+          errors: [err.message || "Image upload failed."],
+          old: {
+            title: req.body && req.body.title,
+            location: req.body && req.body.location,
+            price: req.body && req.body.price,
+            propertyType: req.body && req.body.propertyType,
+            description: req.body && req.body.description,
+            isVerified: req.body && req.body.isVerified,
+          },
+        });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    const live = await User.findById(req.session.user.id).select("role").lean();
+    if (!live || normaliseRole(live.role) !== "owner") {
+      req.session.flashError = "Only property owners can create listings.";
+      return res.redirect("/listings");
+    }
+
+    const errors = validateListing(req.body);
+    if (errors.length > 0) {
+      return res.status(400).render("listings/new", { errors, old: req.body });
+    }
+
+    if (!req.session.user || !req.session.user.id) {
+      req.session.flashError = "Your session expired. Please log in again.";
+      return res.redirect("/auth/login");
+    }
+
+    const imagePaths = uploadPathsFromFiles(req);
+
+    try {
+      await Listing.create({
+        title: req.body.title.trim(),
+        location: req.body.location.trim(),
+        price: Number(req.body.price),
+        propertyType: req.body.propertyType.trim(),
+        description: req.body.description.trim(),
+        isVerified: req.body.isVerified === "on",
+        owner: req.session.user.id,
+        images: imagePaths,
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("Create listing failed:", err.message);
+      return res.status(500).render("listings/new", {
+        errors: ["Could not save listing. Please try again. If this continues, log out and log in again."],
+        old: req.body,
+      });
+    }
+
+    return res.redirect("/listings");
+  }
+);
 
 // Read one listing.
 router.get("/:id", async (req, res) => {

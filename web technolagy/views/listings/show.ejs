@@ -1,6 +1,13 @@
 <%- include("../partials/header") %>
 <div class="card">
   <h2><%= listing.title %></h2>
+  <% if (listing.images && listing.images.length) { %>
+    <div style="margin:12px 0;">
+      <% listing.images.forEach((src) => { %>
+        <img src="<%= src %>" alt="" style="max-width:200px;max-height:150px;object-fit:cover;margin:4px;border-radius:6px;" />
+      <% }) %>
+    </div>
+  <% } %>
   <p><strong>Location:</strong> <%= listing.location %></p>
   <p><strong>Price:</strong> EUR <%= listing.price %></p>
   <p><strong>Property Type:</strong> <%= listing.propertyType %></p>

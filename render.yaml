@@ -1,0 +1,16 @@
+# If this Git repository root is "GroupSafeStayAssignment2SafeStay" (this folder), use this
+# in Render: Blueprints → New Blueprint Instance, or add file at repo root.
+# If your Git repo is ONLY the "safestay-react" folder, use safestay-react/render.yaml instead.
+#
+# Docs: https://render.com/docs/static-sites
+services:
+  - type: web
+    name: safestay
+    runtime: static
+    rootDir: safestay-react
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

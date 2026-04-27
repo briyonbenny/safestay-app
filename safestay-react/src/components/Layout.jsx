@@ -54,9 +54,14 @@ export const Layout = () => {
               Browse
             </NavLink>
             {user?.role === 'owner' && (
-              <NavLink to="/listings/new" className={linkClass} onClick={onNavigate}>
-                Add property
-              </NavLink>
+              <>
+                <NavLink to="/listings/mine" className={linkClass} onClick={onNavigate}>
+                  My properties
+                </NavLink>
+                <NavLink to="/listings/new" className={linkClass} onClick={onNavigate}>
+                  Add property
+                </NavLink>
+              </>
             )}
             <NavLink to="/favourites" className={linkClass} onClick={onNavigate}>
               Saved

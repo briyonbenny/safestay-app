@@ -8,6 +8,7 @@ const MongoStore = require("connect-mongo").default;
 const cookieParser = require("cookie-parser");
 const methodOverride = require("method-override");
 const mongoose = require("mongoose");
+const cors = require("cors");
 
 const connectDatabase = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
@@ -75,7 +76,7 @@ function registerRoutes() {
     res.status(200).json({
       name: "SafeStay API",
       hint: "Try GET /api/listings for JSON listings.",
-      routes: ["/api/auth", "/api/listings", "/health"],
+      routes: ["/api/auth", "/api/listings (GET /mine for owners)", "/health"],
     });
   });
   app.use("/api/auth", apiAuthRoutes);
@@ -114,6 +115,15 @@ function createSessionStore() {
 async function start() {
   await connectDatabase();
 
+  const clientOrigin = (process.env.CLIENT_ORIGIN || "").trim();
+  const crossSiteClient = Boolean(clientOrigin);
+  app.use(
+    cors({
+      origin: clientOrigin || true,
+      credentials: true,
+    })
+  );
+
   const sessionStore = createSessionStore();
 
   app.use(
@@ -124,7 +134,9 @@ async function start() {
       saveUninitialized: false,
       cookie: {
         httpOnly: true,
-        sameSite: "lax",
+        // Separate React static site on another origin needs SameSite=None + Secure
+        sameSite: crossSiteClient ? "none" : "lax",
+        secure: crossSiteClient || process.env.NODE_ENV === "production",
         maxAge: 1000 * 60 * 60 * 24, // 1 day
       },
       store: sessionStore,

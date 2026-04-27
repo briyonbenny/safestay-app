@@ -20,6 +20,7 @@
       <% if (currentUser) { %>
         <% if (currentUser.role === "owner") { %>
           <a href="/listings/new">Create Listing</a>
+          <a href="/listings/mine">My properties</a>
         <% } %>
         <a href="/listings/user/favourites">Favourites</a>
         <span style="color:#555;font-size:0.9em;margin-right:8px;">(signed in as <%= currentUser.role %>)</span>

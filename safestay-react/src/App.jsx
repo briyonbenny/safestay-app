@@ -5,6 +5,7 @@ import { HomePage } from './pages/HomePage.jsx';
 import { ListingsPage } from './pages/ListingsPage.jsx';
 import { ListingDetailPage } from './pages/ListingDetailPage.jsx';
 import { CreateListingPage } from './pages/CreateListingPage.jsx';
+import { MyListingsPage } from './pages/MyListingsPage.jsx';
 import { FavouritesPage } from './pages/FavouritesPage.jsx';
 import { ChatPage } from './pages/ChatPage.jsx';
 import { LoginPage } from './pages/LoginPage.jsx';
@@ -24,6 +25,7 @@ function App() {
             <Route index element={<HomePage />} />
             <Route path="listings" element={<ListingsPage />} />
             <Route path="listings/new" element={<CreateListingPage />} />
+            <Route path="listings/mine" element={<MyListingsPage />} />
             <Route path="listings/:id" element={<ListingDetailPage />} />
             <Route path="favourites" element={<FavouritesPage />} />
             <Route path="chat" element={<ChatPage />} />

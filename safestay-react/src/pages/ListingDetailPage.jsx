@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useSafeStay } from '../context/SafeStayContext.jsx';
+import { publicImageUrl } from '../api/safeStayApi.js';
 import { validateRequired } from '../utils/validation.js';
 
 /**
@@ -41,9 +42,23 @@ export const ListingDetailPage = () => {
     setReportText('');
   };
 
+  const hero = listing.images?.[0] ? publicImageUrl(listing.images[0]) : null;
+
   return (
     <div className="page detail-page">
-      <div className={`detail-hero detail-hero--${listing.imageHint}`} aria-hidden />
+      {hero ? (
+        <div
+          className="detail-hero"
+          style={{
+            minHeight: 200,
+            background: `url(${hero}) center/cover no-repeat`,
+            borderRadius: 12,
+          }}
+          aria-hidden
+        />
+      ) : (
+        <div className={`detail-hero detail-hero--${listing.imageHint || 'room-1'}`} aria-hidden />
+      )}
       <div className="detail-layout">
         <div>
           <h1>{listing.title}</h1>

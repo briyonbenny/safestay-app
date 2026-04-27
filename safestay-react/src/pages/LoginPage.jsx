@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSafeStay } from '../context/SafeStayContext.jsx';
 import { validateEmail, validatePassword } from '../utils/validation.js';
+import { isApiModeEnabled } from '../api/safeStayApi.js';
 
 // Sensible test values; clear or change before a production launch.
 const PREFILL_EMAIL = 'student@university.ie';
 const PREFILL_PASSWORD = 'Password1';
 
 /**
- * VIEW: Sign-in. Client-side validation; account role is restored if you already registered.
+ * VIEW: Sign-in. Client-side validation; with VITE_USE_API, calls POST /api/auth/login.
  */
 export const LoginPage = () => {
   const { login, getRoleForEmail } = useSafeStay();
@@ -17,7 +18,7 @@ export const LoginPage = () => {
   const [password, setPassword] = useState(PREFILL_PASSWORD);
   const [error, setError] = useState('');
 
-  const onSubmit = (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
     const eRes = validateEmail(email);
@@ -30,6 +31,17 @@ export const LoginPage = () => {
       setError(pRes.message);
       return;
     }
+
+    if (isApiModeEnabled()) {
+      try {
+        await login({ email: eRes.value, _password: password });
+        navigate('/listings');
+      } catch (err) {
+        setError(err && err.message ? err.message : 'Login failed.');
+      }
+      return;
+    }
+
     const role = getRoleForEmail(eRes.value);
     login({ email: eRes.value, role });
     navigate('/listings');

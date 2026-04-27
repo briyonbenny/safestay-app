@@ -6,25 +6,35 @@ import {
   validatePassword,
   validatePasswordsMatch,
 } from '../utils/validation.js';
+import { apiFetch, isApiModeEnabled } from '../api/safeStayApi.js';
 
+const PREFILL_NAME = 'Alex Student';
 const PREFILL_EMAIL = 'new.user@university.ie';
 const PREFILL_PASSWORD = 'Password1';
 
 /**
- * VIEW: Registration. Picks account type: student (search/save) or property owner (add a property).
+ * VIEW: Registration. With VITE_USE_API, uses POST /api/auth/signup (real Mongo account).
  */
 export const RegisterPage = () => {
-  const { login, saveAccountRole } = useSafeStay();
+  const { login, saveAccountRole, applyServerUser } = useSafeStay();
   const navigate = useNavigate();
+  const [fullName, setFullName] = useState(PREFILL_NAME);
   const [email, setEmail] = useState(PREFILL_EMAIL);
   const [password, setPassword] = useState(PREFILL_PASSWORD);
   const [confirm, setConfirm] = useState(PREFILL_PASSWORD);
   const [role, setRole] = useState('student');
   const [error, setError] = useState('');
 
-  const onSubmit = (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    const n = fullName?.trim() || '';
+    if (isApiModeEnabled() && n.length < 2) {
+      setError('Please enter your full name (at least 2 characters).');
+      return;
+    }
+
     const eRes = validateEmail(email);
     if (!eRes.ok) {
       setError(eRes.message);
@@ -41,6 +51,34 @@ export const RegisterPage = () => {
       return;
     }
     const roleValue = role === 'owner' ? 'owner' : 'student';
+
+    if (isApiModeEnabled()) {
+      try {
+        const res = await apiFetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fullName: n,
+            email: eRes.value,
+            password,
+            role: roleValue,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(data.error || (data.errors && data.errors[0]) || 'Could not create account.');
+          return;
+        }
+        if (data.user) {
+          await applyServerUser(data.user);
+        }
+        navigate('/listings');
+      } catch (err) {
+        setError(err && err.message ? err.message : 'Sign up failed.');
+      }
+      return;
+    }
+
     saveAccountRole(eRes.value, roleValue);
     login({ email: eRes.value, role: roleValue });
     navigate('/listings');
@@ -51,6 +89,20 @@ export const RegisterPage = () => {
       <h1>Register</h1>
       <p className="form-page__intro">Create a profile, then browse listings or list your own property on SafeStay.</p>
       <form className="form-card" onSubmit={onSubmit} noValidate>
+        {isApiModeEnabled() && (
+          <label className="field">
+            <span>Full name</span>
+            <input
+              type="text"
+              name="fullName"
+              autoComplete="name"
+              value={fullName}
+              onChange={(ev) => setFullName(ev.target.value)}
+              minLength={2}
+              required
+            />
+          </label>
+        )}
         <label className="field">
           <span>Email</span>
           <input
