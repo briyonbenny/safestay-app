@@ -1,0 +1,13 @@
+# When your Git repository root is this folder (safestay-react only), deploy with Blueprint
+# or match these in the Render dashboard. SPA rewrite is required for React Router.
+# https://render.com/docs/static-sites
+services:
+  - type: web
+    name: safestay
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
