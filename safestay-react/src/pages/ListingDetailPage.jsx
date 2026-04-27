@@ -64,12 +64,11 @@ export const ListingDetailPage = () => {
     }
   };
 
-  const chatTo =
-    user && user.id && listing.id
-      ? isOwner
-        ? `/chat`
-        : `/chat?listingId=${encodeURIComponent(listing.id)}`
-      : '/auth/login';
+  // Do not require user.id: sessions from localStorage may not have `id` until /api/auth/me
+  // returns; the link was incorrectly pointing to /auth/login even for logged-in students.
+  const chatTo = isOwner
+    ? '/chat'
+    : `/chat?listingId=${encodeURIComponent(listing.id)}`;
   const chatState = { listingTitle: listing.title, listingId: listing.id };
 
   const hero = listing.images?.[0] ? publicImageUrl(listing.images[0]) : null;
