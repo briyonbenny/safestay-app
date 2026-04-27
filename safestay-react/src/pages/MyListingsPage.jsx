@@ -8,9 +8,19 @@ import { ListingCard } from '../components/ListingCard.jsx';
  * Owner: properties you have added (API: GET /api/listings/mine; mock: filter by owner name).
  */
 export const MyListingsPage = () => {
-  const { user, listings, apiReady } = useSafeStay();
+  const { user, listings, apiReady, deleteListing } = useSafeStay();
   const [mine, setMine] = useState([]);
   const [error, setError] = useState('');
+
+  const onDelete = async (id) => {
+    if (!window.confirm('Delete this listing? It cannot be undone.')) return;
+    try {
+      await deleteListing(id);
+      setMine((prev) => prev.filter((x) => x.id !== id));
+    } catch (e) {
+      setError(e && e.message ? e.message : 'Delete failed.');
+    }
+  };
 
   useEffect(() => {
     if (!user || user.role !== 'owner') return;
@@ -74,7 +84,17 @@ export const MyListingsPage = () => {
       </p>
       <div className="listing-grid">
         {mine.map((l) => (
-          <ListingCard key={l.id} listing={l} />
+          <div key={l.id} className="listing-card__wrap">
+            <ListingCard listing={l} showFavourite={false} />
+            <button
+              type="button"
+              className="button button--ghost"
+              style={{ marginTop: 8, width: '100%' }}
+              onClick={() => onDelete(l.id)}
+            >
+              Delete listing
+            </button>
+          </div>
         ))}
       </div>
       {mine.length === 0 && !error && <p className="empty">You have not added any properties yet. <Link to="/listings/new">Create a listing</Link></p>}

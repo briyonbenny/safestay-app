@@ -1,23 +1,24 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useSafeStay } from '../context/SafeStayContext.jsx';
 import { publicImageUrl } from '../api/safeStayApi.js';
 import { validateRequired } from '../utils/validation.js';
 
 /**
- * VIEW: Listing detail + report flow (Assignment 3).
- * Report uses client validation and a success confirmation; maps to "Reporting" in proposal.
- * Future: POST /api/reports, GET /api/listings/:id.
+ * VIEW: Listing detail, report, owner delete, link to real chat (API) or mock flow.
  */
 export const ListingDetailPage = () => {
   const { id } = useParams();
-  const { listings, isFavourite, toggleFavourite } = useSafeStay();
+  const navigate = useNavigate();
+  const { listings, isFavourite, toggleFavourite, user, deleteListing } = useSafeStay();
   const listing = listings.find((l) => l.id === id);
 
   const [showReport, setShowReport] = useState(false);
   const [reportText, setReportText] = useState('');
   const [reportError, setReportError] = useState('');
   const [reportSuccess, setReportSuccess] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   if (!listing) {
     return (
@@ -28,6 +29,12 @@ export const ListingDetailPage = () => {
       </div>
     );
   }
+
+  const isOwner =
+    user?.role === 'owner' &&
+    (listing.ownerId
+      ? user?.id && String(user.id) === String(listing.ownerId)
+      : listing.ownerName === user?.email);
 
   const onReport = (e) => {
     e.preventDefault();
@@ -41,6 +48,29 @@ export const ListingDetailPage = () => {
     setShowReport(false);
     setReportText('');
   };
+
+  const onDelete = async () => {
+    if (!isOwner) return;
+    if (!window.confirm('Delete this listing? This cannot be undone.')) return;
+    setDeleteError('');
+    setDeleting(true);
+    try {
+      await deleteListing(listing.id);
+      navigate('/listings/mine');
+    } catch (e) {
+      setDeleteError(e && e.message ? e.message : 'Delete failed.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const chatTo =
+    user && user.id && listing.id
+      ? isOwner
+        ? `/chat`
+        : `/chat?listingId=${encodeURIComponent(listing.id)}`
+      : '/auth/login';
+  const chatState = { listingTitle: listing.title, listingId: listing.id };
 
   const hero = listing.images?.[0] ? publicImageUrl(listing.images[0]) : null;
 
@@ -78,13 +108,16 @@ export const ListingDetailPage = () => {
         </div>
         <aside className="detail-aside">
           <div className="stack">
-            <Link
-              to="/chat"
-              state={{ listingTitle: listing.title }}
-              className="button button--secondary"
-            >
-              Message the owner
-            </Link>
+            {!user && (
+              <Link to="/auth/login" className="button button--secondary" state={{ from: `/listings/${listing.id}` }}>
+                Log in to message the owner
+              </Link>
+            )}
+            {user && user.role === 'student' && !isOwner && (
+              <Link to={chatTo} state={chatState} className="button button--secondary">
+                Message the owner
+              </Link>
+            )}
             <button
               type="button"
               className={`button button--primary${isFavourite(listing.id) ? ' is-saved' : ''}`}
@@ -92,6 +125,23 @@ export const ListingDetailPage = () => {
             >
               {isFavourite(listing.id) ? 'Remove from saved' : 'Save listing'}
             </button>
+            {isOwner && (
+              <>
+                <button
+                  type="button"
+                  className="button"
+                  onClick={onDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? 'Deleting…' : 'Delete listing'}
+                </button>
+                {deleteError && (
+                  <p className="form-error" role="alert">
+                    {deleteError}
+                  </p>
+                )}
+              </>
+            )}
             <button type="button" className="button button--ghost" onClick={() => setShowReport(true)}>
               Report this listing
             </button>

@@ -1,67 +1,120 @@
-import { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams, useLocation } from 'react-router-dom';
 import { validateRequired } from '../utils/validation.js';
 import { useSafeStay } from '../context/SafeStayContext.jsx';
+import { apiFetch, isApiModeEnabled } from '../api/safeStayApi.js';
 
-/* Short replies to simulate a host (student) or a renter (owner) after you send a line. */
+/* Mock mode: short simulated replies (no server). */
 const REPLY_AS_OWNER = [
   'Thanks for your message. I can share more details or book a viewing when it suits you.',
   'I am still receiving enquiries — the place is open for September. I will reply with photos shortly.',
-  'Appreciate you getting in touch. I am around most weekday evenings to chat or show the room.',
 ];
 const REPLY_AS_STUDENT = [
   'Thanks — I am still looking and I will get back to you with questions.',
   'Sounds good. I can do a call later this week if you have time.',
-  'I will read the full listing again and follow up. Cheers.',
 ];
-
 const pickReply = (list) => list[Math.floor(Math.random() * list.length)];
 
 /**
- * VIEW: Messages. Sent lines appear for you; the other person’s reply is simulated for this build.
+ * Messages: with VITE_USE_API, real threads via /api/messages; otherwise a short mock chat.
  */
 export const ChatPage = () => {
   const { user } = useSafeStay();
+  const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
+  const listingId = searchParams.get('listingId') || location.state?.listingId;
+  const peerUserId = searchParams.get('peerUserId') || location.state?.peerUserId;
   const fromListing = location.state?.listingTitle;
-  const [messages, setMessages] = useState(() => {
-    if (user?.role === 'owner') {
-      return [
-        { id: 'g1', me: false, text: 'A student has asked about one of your listings. Reply to keep the thread going.' },
-      ];
-    }
-    return [
-      {
-        id: 'g1',
-        me: false,
-        text: 'Write to a host about a property. You will see their answer below your message when you are signed in.',
-      },
-    ];
-  });
+
+  const [threads, setThreads] = useState([]);
+  const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [err, setErr] = useState('');
-  const timeoutRef = useRef(null);
+  const [loadErr, setLoadErr] = useState('');
+  const [sending, setSending] = useState(false);
   const bottomRef = useRef(null);
-
+  const mockTimeoutRef = useRef(null);
   const prefillOnce = useRef(false);
-  // If you open chat from a listing, prefill the first line once.
-  useEffect(() => {
-    if (!fromListing || prefillOnce.current) return;
-    setText(`I am interested in “${fromListing}”. `);
-    prefillOnce.current = true;
-  }, [fromListing]);
+
+  const inThread = Boolean(
+    listingId && (user?.role === 'student' || (user?.role === 'owner' && peerUserId))
+  );
+
+  const loadThreads = useCallback(async () => {
+    if (!isApiModeEnabled() || !user) return;
+    const res = await apiFetch('/api/messages/threads');
+    if (!res.ok) return;
+    const data = await res.json();
+    setThreads(data.threads || []);
+  }, [user]);
+
+  const loadMessages = useCallback(async () => {
+    if (!isApiModeEnabled() || !user || !listingId) return;
+    const params = new URLSearchParams({ listingId });
+    if (user.role === 'owner' && peerUserId) {
+      params.set('peerUserId', peerUserId);
+    }
+    const res = await apiFetch(`/api/messages?${params.toString()}`);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setLoadErr(d.error || 'Could not load messages.');
+      return;
+    }
+    setLoadErr('');
+    const data = await res.json();
+    setMessages(data.messages || []);
+  }, [user, listingId, peerUserId]);
 
   useEffect(() => {
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, []);
+    if (!isApiModeEnabled() || !user) return;
+    loadThreads();
+  }, [user, loadThreads]);
+
+  useEffect(() => {
+    if (!isApiModeEnabled() || !inThread) return;
+    loadMessages();
+    const t = setInterval(loadMessages, 4000);
+    return () => clearInterval(t);
+  }, [inThread, loadMessages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [messages.length]);
 
-  const onSend = (e) => {
+  // Mock mode initial state
+  useEffect(() => {
+    if (isApiModeEnabled()) return;
+    if (user?.role === 'owner') {
+      setMessages([
+        { _id: 'g1', from: { id: 'sys' }, to: { id: 'me' }, text: 'A student can message you from a listing. Open Messages from the menu to see threads when using the live API.' },
+      ]);
+    } else {
+      setMessages([
+        {
+          _id: 'g1',
+          from: { id: 'sys' },
+          to: { id: 'me' },
+          text: 'Sign in and open a listing as a student, then "Message the owner" (or enable the API for real chat).',
+        },
+      ]);
+    }
+  }, [user?.role, user]);
+
+  useEffect(() => {
+    if (!fromListing || prefillOnce.current || isApiModeEnabled()) return;
+    setText((t) => (t ? t : `I am interested in “${fromListing}”. `));
+    prefillOnce.current = true;
+  }, [fromListing]);
+
+  const openThread = (t) => {
+    if (t.iAmOwner) {
+      setSearchParams({ listingId: t.listingId, peerUserId: t.peer.id });
+    } else {
+      setSearchParams({ listingId: t.listingId });
+    }
+  };
+
+  const onSend = async (e) => {
     e.preventDefault();
     setErr('');
     if (!user) {
@@ -73,42 +126,171 @@ export const ChatPage = () => {
       setErr(v.message);
       return;
     }
-    const outId = `u-${Date.now()}`;
-    setMessages((m) => [...m, { id: outId, me: true, text: v.value }]);
-    setText('');
 
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
+    if (isApiModeEnabled()) {
+      if (!listingId) {
+        setErr('Open a thread from the list, or from a property page.');
+        return;
+      }
+      if (user.role === 'owner' && !peerUserId) {
+        setErr('Pick a conversation from the list (student) first.');
+        return;
+      }
+      setSending(true);
+      try {
+        const body = { listingId, text: v.value };
+        if (user.role === 'owner') {
+          body.toUserId = peerUserId;
+        }
+        const res = await apiFetch('/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setErr(data.error || 'Send failed.');
+          return;
+        }
+        setText('');
+        if (data.message) {
+          setMessages((m) => [...m, data.message]);
+        } else {
+          loadMessages();
+        }
+        loadThreads();
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
+    // Mock: echo + fake reply
+    const outId = `u-${Date.now()}`;
+    setMessages((m) => [...m, { _id: outId, from: { id: user.email }, to: { id: 'them' }, text: v.value }]);
+    setText('');
+    if (mockTimeoutRef.current) clearTimeout(mockTimeoutRef.current);
+    mockTimeoutRef.current = setTimeout(() => {
       const isOwner = user.role === 'owner';
       const back = pickReply(isOwner ? REPLY_AS_STUDENT : REPLY_AS_OWNER);
       setMessages((m) => [
         ...m,
-        { id: `r-${Date.now()}`, me: false, text: back },
+        { _id: `r-${Date.now()}`, from: { id: 'them' }, to: { id: user.email }, text: back },
       ]);
     }, 900);
   };
 
+  if (!user) {
+    return (
+      <div className="page chat-page">
+        <h1>Messages</h1>
+        <p>
+          <Link to="/auth/login">Log in</Link> to use messaging.
+        </p>
+      </div>
+    );
+  }
+
+  if (isApiModeEnabled()) {
+    return (
+      <div className="page chat-page">
+        <h1>Messages</h1>
+        {!inThread && (
+          <>
+            <p className="lede">Your conversations. Click one to read and reply.</p>
+            <ul className="thread-list" style={{ listStyle: 'none', padding: 0, maxWidth: 640 }}>
+              {threads.map((t) => (
+                <li key={t.listingId + t.peer.id} style={{ marginBottom: 12 }}>
+                  <button
+                    type="button"
+                    className="button"
+                    style={{ textAlign: 'left', width: '100%' }}
+                    onClick={() => openThread(t)}
+                  >
+                    <strong>{t.listingTitle}</strong>
+                    <br />
+                    <span style={{ fontSize: '0.9em', color: '#444' }}>
+                      {t.iAmOwner ? 'Student' : 'Host'}: {t.peer.name}
+                    </span>
+                    {t.lastMessage && (
+                      <span style={{ display: 'block', marginTop: 4, fontSize: '0.85em' }}>{t.lastMessage.text?.slice(0, 80)}</span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {threads.length === 0 && <p className="empty">No messages yet. Students: open a property and use &quot;Message the owner&quot;.</p>}
+          </>
+        )}
+
+        {inThread && (
+          <>
+            <p className="lede">
+              <Link to="/chat">← All threads</Link>
+            </p>
+            {loadErr && <p className="form-error">{loadErr}</p>}
+            <div className="chat-window" role="log">
+              {messages.map((m) => {
+                const fromId = m.from?.id;
+                const mine = fromId && user.id && String(fromId) === String(user.id);
+                return (
+                  <div key={m._id} className={`bubble${mine ? ' bubble--me' : ' bubble--them'}`}>
+                    {m.text}
+                  </div>
+                );
+              })}
+              <div ref={bottomRef} />
+            </div>
+            <form className="chat-composer" onSubmit={onSend}>
+              {err && (
+                <p className="form-error" role="alert">
+                  {err}
+                </p>
+              )}
+              <label className="field field--row">
+                <span className="visually-hidden">Message</span>
+                <input
+                  type="text"
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  autoComplete="off"
+                />
+                <button type="submit" className="button button--primary" disabled={sending}>
+                  {sending ? '…' : 'Send'}
+                </button>
+              </label>
+            </form>
+          </>
+        )}
+
+        {!inThread && user.role === 'student' && (
+          <p className="form-page__foot" style={{ marginTop: 16 }}>
+            To start a thread, go to a <Link to="/listings">listing</Link> and click <strong>Message the owner</strong>.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // --- Mock (non-API) simple UI ---
   return (
     <div className="page chat-page">
-      <h1>Messages</h1>
+      <h1>Messages (demo mode)</h1>
       {fromListing && (
         <p className="lede" role="status">
           <strong>Regarding:</strong> {fromListing}
         </p>
       )}
-      <p className="lede">
-        Message the other party about a listing. Your messages appear on the right; the reply appears
-        on the left after a short moment.
-      </p>
-      <div className="chat-window" role="log" aria-relevant="additions">
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={`bubble${m.me ? ' bubble--me' : ' bubble--them'}`}
-          >
-            {m.text}
-          </div>
-        ))}
+      <p className="lede">Enable the API in .env to use real messaging between students and owners.</p>
+      <div className="chat-window" role="log">
+        {messages.map((m) => {
+          const mine = m.from?.id && user.id && (String(m.from.id) === String(user.id) || m.from.id === user.email);
+          return (
+            <div key={m._id} className={`bubble${mine ? ' bubble--me' : ' bubble--them'}`}>
+              {m.text}
+            </div>
+          );
+        })}
         <div ref={bottomRef} />
       </div>
       <form className="chat-composer" onSubmit={onSend}>
@@ -118,18 +300,8 @@ export const ChatPage = () => {
           </p>
         )}
         <label className="field field--row">
-          <span className="visually-hidden">Message</span>
-          <input
-            type="text"
-            name="message"
-            placeholder="Type a message to send"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            autoComplete="off"
-          />
-          <button type="submit" className="button button--primary">
-            Send
-          </button>
+          <input type="text" value={text} onChange={(e) => setText(e.target.value)} autoComplete="off" />
+          <button type="submit" className="button button--primary">Send</button>
         </label>
       </form>
     </div>

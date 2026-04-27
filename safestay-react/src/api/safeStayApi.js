@@ -39,6 +39,14 @@ export function mapApiListingToCard(row) {
     description: row.description,
     isVerified: Boolean(row.isVerified),
     ownerName: row.owner?.fullName || row.owner?.email || "Host",
+    /** Present when using API; used to show delete / owner-only actions */
+    ownerId: (() => {
+      const o = row.owner;
+      if (!o) return null;
+      if (typeof o === 'string') return o;
+      const id = o.id ?? o._id;
+      return id != null ? String(id) : null;
+    })(),
     images: Array.isArray(row.images) ? row.images : [],
     imageHint: "room-1",
   };

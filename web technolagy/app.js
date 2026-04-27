@@ -15,6 +15,7 @@ const authRoutes = require("./routes/authRoutes");
 const listingRoutes = require("./routes/listingRoutes");
 const apiAuthRoutes = require("./routes/apiAuthRoutes");
 const apiListingRoutes = require("./routes/apiListingRoutes");
+const apiMessageRoutes = require("./routes/apiMessageRoutes");
 const { attachCurrentUser } = require("./middleware/auth");
 
 const app = express();
@@ -76,10 +77,11 @@ function registerRoutes() {
     res.status(200).json({
       name: "SafeStay API",
       hint: "Try GET /api/listings for JSON listings.",
-      routes: ["/api/auth", "/api/listings (GET /mine for owners)", "/health"],
+      routes: ["/api/auth", "/api/listings", "/api/messages/threads", "/api/messages", "/health"],
     });
   });
   app.use("/api/auth", apiAuthRoutes);
+  app.use("/api/messages", apiMessageRoutes);
   app.use("/api/listings", apiListingRoutes);
 
   app.use((req, res) => {

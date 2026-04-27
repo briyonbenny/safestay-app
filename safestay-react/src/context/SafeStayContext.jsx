@@ -174,6 +174,17 @@ export const SafeStayProvider = ({ children }) => {
     [user?.email]
   );
 
+  const deleteListing = useCallback(async (id) => {
+    if (isApiModeEnabled()) {
+      const res = await apiFetch(`/api/listings/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Could not delete listing.');
+      }
+    }
+    setListings((prev) => prev.filter((l) => l.id !== id));
+  }, []);
+
   const toggleFavourite = useCallback(
     async (id) => {
       if (isApiModeEnabled()) {
@@ -291,6 +302,7 @@ export const SafeStayProvider = ({ children }) => {
       isFavourite,
       loadListingsFromApi,
       applyServerUser,
+      deleteListing,
     }),
     [
       listings,
@@ -307,6 +319,7 @@ export const SafeStayProvider = ({ children }) => {
       isFavourite,
       loadListingsFromApi,
       applyServerUser,
+      deleteListing,
     ]
   );
 
