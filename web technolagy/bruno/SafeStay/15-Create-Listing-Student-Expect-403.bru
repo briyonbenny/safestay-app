@@ -1,0 +1,22 @@
+meta {
+  name: Create Listing As Student Expect 403
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{baseUrl}}/api/listings
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "title": "Should Fail",
+    "location": "Cork",
+    "price": 100,
+    "propertyType": "studio",
+    "description": "Student must not create listings in this RBAC model.",
+    "isVerified": false
+  }
+}

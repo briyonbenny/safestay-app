@@ -1,0 +1,44 @@
+<%- include("../partials/header") %>
+<h2>Create Listing</h2>
+
+<p>This page is only available to <strong>property owners</strong>. Your listing will be saved only after the checks below pass on the server.</p>
+<p><strong>Rules:</strong> title at least 3 characters; description at least <strong>10</strong> characters; price a number greater than 0.</p>
+
+<% if (errors.length) { %>
+  <div class="error" role="alert">
+    <p><strong>Please fix the following:</strong></p>
+    <ul>
+      <% errors.forEach((error) => { %>
+        <li><%= error %></li>
+      <% }) %>
+    </ul>
+  </div>
+<% } %>
+
+<form method="POST" action="/listings" enctype="multipart/form-data">
+  <label>Title (min. 3 characters)</label>
+  <input type="text" name="title" value="<%= old.title || '' %>" minlength="3" required />
+
+  <label>Location</label>
+  <input type="text" name="location" value="<%= old.location || '' %>" required />
+
+  <label>Price (EUR, whole number)</label>
+  <input type="number" name="price" min="1" step="1" value="<%= old.price || '' %>" required />
+
+  <label>Property Type (e.g. shared room, studio)</label>
+  <input type="text" name="propertyType" value="<%= old.propertyType || '' %>" required />
+
+  <label>Description (min. 10 characters)</label>
+  <textarea name="description" rows="5" minlength="10" required><%= old.description || '' %></textarea>
+
+  <label>Photos (optional, up to 8 — JPEG, PNG, GIF, WebP, max 5 MB each)</label>
+  <input type="file" name="images" accept="image/jpeg,image/png,image/gif,image/webp" multiple />
+
+  <label>
+    <input type="checkbox" name="isVerified" <%= old.isVerified ? "checked" : "" %> />
+    Mark as verified
+  </label>
+  <button type="submit">Create Listing</button>
+</form>
+
+<%- include("../partials/footer") %>

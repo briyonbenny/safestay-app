@@ -1,0 +1,29 @@
+<%- include("../partials/header") %>
+<h2>Sign Up</h2>
+<% if (errors.length) { %>
+  <ul class="error">
+    <% errors.forEach((error) => { %>
+      <li><%= error %></li>
+    <% }) %>
+  </ul>
+<% } %>
+<form method="POST" action="/auth/signup">
+  <label>Full Name</label>
+  <input type="text" name="fullName" value="<%= old.fullName || '' %>" required />
+
+  <label>Email</label>
+  <input type="email" name="email" value="<%= old.email || '' %>" required />
+
+  <label>Password</label>
+  <input type="password" name="password" required />
+
+  <label>Role</label>
+  <select name="role" required>
+    <option value="student" <%= old.role === "student" ? "selected" : "" %>>Student</option>
+    <option value="owner" <%= old.role === "owner" ? "selected" : "" %>>Owner</option>
+  </select>
+  <p><small>Choose <strong>Owner</strong> if you will create property listings. Students can browse and save favourites.</small></p>
+
+  <button type="submit">Create Account</button>
+</form>
+<%- include("../partials/footer") %>

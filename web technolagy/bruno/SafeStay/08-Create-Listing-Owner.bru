@@ -1,0 +1,29 @@
+meta {
+  name: Create Listing Owner
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/listings
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "title": "API Test Room",
+    "location": "Cork",
+    "price": 450,
+    "propertyType": "shared",
+    "description": "Clean room near Griffith, 10 min walk.",
+    "isVerified": false
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  if (body && body.listing && body.listing._id) {
+    bru.setEnvVar("listingId", body.listing._id);
+  }
+}

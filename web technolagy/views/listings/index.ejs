@@ -1,0 +1,36 @@
+<%- include("../partials/header") %>
+<h2>All Listings</h2>
+
+<% if (!currentUser) { %>
+  <p><a href="/auth/login">Log in</a> or <a href="/auth/signup">sign up</a> to save favourites. <strong>Property owners</strong> (sign up with the owner role) can create and manage listings.</p>
+<% } else if (currentUser.role === "student") { %>
+  <p>You are signed in as a <strong>student</strong>. You can browse, filter, and favourite listings. Only <strong>property owners</strong> can create new listings.</p>
+<% } %>
+
+<form method="GET" action="/listings">
+  <label>Location</label>
+  <input type="text" name="location" value="<%= filters.location || '' %>" />
+
+  <label>Property Type</label>
+  <input type="text" name="propertyType" value="<%= filters.propertyType || '' %>" />
+
+  <label>Max Price</label>
+  <input type="number" name="maxPrice" value="<%= filters.maxPrice || '' %>" />
+  <button type="submit">Filter</button>
+</form>
+
+<% if (!listings.length) { %>
+  <p>No listings found.</p>
+<% } %>
+
+<% listings.forEach((listing) => { %>
+  <div class="card">
+    <h3><a href="/listings/<%= listing._id %>"><%= listing.title %></a></h3>
+    <p><strong>Location:</strong> <%= listing.location %></p>
+    <p><strong>Price:</strong> EUR <%= listing.price %></p>
+    <p><strong>Type:</strong> <%= listing.propertyType %></p>
+    <p><strong>Owner:</strong> <%= listing.owner ? listing.owner.fullName : "Unknown" %></p>
+  </div>
+<% }) %>
+
+<%- include("../partials/footer") %>

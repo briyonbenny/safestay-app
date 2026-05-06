@@ -1,0 +1,29 @@
+<%- include("../partials/header") %>
+<h2>My properties</h2>
+<p>These are the listings you have added. <a href="/listings/new">Add another</a> or <a href="/listings">browse all</a>.</p>
+
+<% if (!listings || !listings.length) { %>
+  <p>You have not created any listings yet. <a href="/listings/new">Create your first property</a>.</p>
+<% } else { %>
+  <% listings.forEach((listing) => { %>
+    <div class="card">
+      <h3><a href="/listings/<%= listing._id %>"><%= listing.title %></a></h3>
+      <% if (listing.images && listing.images.length) { %>
+        <p>
+          <% listing.images.slice(0, 3).forEach((src) => { %>
+            <img src="<%= src %>" alt="" style="max-width:120px;max-height:90px;object-fit:cover;margin-right:6px;vertical-align:middle;border-radius:4px;" />
+          <% }) %>
+        </p>
+      <% } %>
+      <p><strong>Location:</strong> <%= listing.location %></p>
+      <p><strong>Price:</strong> EUR <%= listing.price %> / month</p>
+      <p><strong>Type:</strong> <%= listing.propertyType %></p>
+      <p>
+        <a href="/listings/<%= listing._id %>/edit">Edit</a> ·
+        <a href="/listings/<%= listing._id %>">View</a>
+      </p>
+    </div>
+  <% }) %>
+<% } %>
+
+<%- include("../partials/footer") %>

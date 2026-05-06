@@ -1,0 +1,36 @@
+<%- include("../partials/header") %>
+<h2>Edit Listing</h2>
+
+<% if (errors.length) { %>
+  <ul class="error">
+    <% errors.forEach((error) => { %>
+      <li><%= error %></li>
+    <% }) %>
+  </ul>
+<% } %>
+
+<form method="POST" action="/listings/<%= listing._id %>?_method=PUT">
+  <label>Title</label>
+  <input type="text" name="title" value="<%= listing.title %>" required />
+
+  <label>Location</label>
+  <input type="text" name="location" value="<%= listing.location %>" required />
+
+  <label>Price</label>
+  <input type="number" name="price" min="1" value="<%= listing.price %>" required />
+
+  <label>Property Type</label>
+  <input type="text" name="propertyType" value="<%= listing.propertyType %>" required />
+
+  <label>Description</label>
+  <textarea name="description" rows="5" required><%= listing.description %></textarea>
+
+  <label>
+    <input type="checkbox" name="isVerified" <%= listing.isVerified ? "checked" : "" %> />
+    Mark as verified
+  </label>
+
+  <button type="submit">Update Listing</button>
+</form>
+
+<%- include("../partials/footer") %>

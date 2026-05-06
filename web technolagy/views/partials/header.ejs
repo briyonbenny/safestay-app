@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SafeStay</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; line-height: 1.5; }
+      nav a { margin-right: 12px; }
+      form.inline { display: inline; }
+      .error { color: #b30000; }
+      .card { border: 1px solid #ddd; padding: 12px; margin-bottom: 12px; border-radius: 8px; }
+      input, select, textarea { width: 100%; padding: 8px; margin-bottom: 10px; }
+      button { padding: 8px 12px; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <a href="/listings">All Listings</a>
+      <% if (currentUser) { %>
+        <% if (currentUser.role === "owner") { %>
+          <a href="/listings/new">Create Listing</a>
+          <a href="/listings/mine">My properties</a>
+        <% } %>
+        <a href="/listings/user/favourites">Favourites</a>
+        <span style="color:#555;font-size:0.9em;margin-right:8px;">(signed in as <%= currentUser.role %>)</span>
+        <form class="inline" method="POST" action="/auth/logout">
+          <button type="submit">Logout (<%= currentUser.fullName %>)</button>
+        </form>
+      <% } else { %>
+        <a href="/auth/login">Login</a>
+        <a href="/auth/signup">Sign Up</a>
+      <% } %>
+    </nav>
+    <hr />
+    <% if (flashError) { %>
+      <p class="error"><%= flashError %></p>
+    <% } %>

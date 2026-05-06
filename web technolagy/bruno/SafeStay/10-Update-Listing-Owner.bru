@@ -1,0 +1,22 @@
+meta {
+  name: Update Listing Owner
+  type: http
+  seq: 10
+}
+
+put {
+  url: {{baseUrl}}/api/listings/{{listingId}}
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "title": "API Test Room Updated",
+    "location": "Cork",
+    "price": 460,
+    "propertyType": "shared",
+    "description": "Updated description text for API test run.",
+    "isVerified": true
+  }
+}
