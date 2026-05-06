@@ -31,11 +31,23 @@ const oid = (s) => {
   return new mongoose.Types.ObjectId(s);
 };
 
+/** Owner id as string whether listing.owner is an ObjectId or a populated { _id } doc. */
+function listingOwnerIdString(listing) {
+  if (!listing || listing.owner == null) return "";
+  const o = listing.owner;
+  if (typeof o === "object" && o._id != null) return String(o._id);
+  return String(o);
+}
+
 // Inbox: latest message per (listing, other person) for the current user.
 router.get("/threads", requireAuthApi, async (req, res) => {
   const me = String(req.session.user.id);
+  const meO = oid(me);
+  if (!meO) {
+    return res.status(400).json({ error: "Invalid session." });
+  }
   try {
-    const raw = await Message.find({ $or: [{ from: me }, { to: me }] })
+    const raw = await Message.find({ $or: [{ from: meO }, { to: meO }] })
       .populate("listing", "title owner")
       .populate("from", "fullName email")
       .populate("to", "fullName email")
@@ -57,7 +69,7 @@ router.get("/threads", requireAuthApi, async (req, res) => {
 
       const otherDoc = fromId === me ? m.to : m.from;
       const otherName = (otherDoc && (otherDoc.fullName || otherDoc.email)) || "User";
-      const ownerId = String(m.listing.owner?._id || m.listing.owner);
+      const ownerId = listingOwnerIdString(m.listing);
 
       threads.push({
         listingId: listId,
@@ -91,7 +103,7 @@ router.get("/", requireAuthApi, async (req, res) => {
       return res.status(404).json({ error: "Listing not found." });
     }
 
-    const ownerId = String(listing.owner);
+    const ownerId = listingOwnerIdString(listing);
     const myRole = normaliseRole(req.session.user.role);
     let peer = peerUserId;
 
@@ -159,7 +171,7 @@ router.post("/", requireAuthApi, async (req, res) => {
     if (!listing) {
       return res.status(404).json({ error: "Listing not found." });
     }
-    const ownerId = String(listing.owner);
+    const ownerId = listingOwnerIdString(listing);
     const myId = String(me);
 
     let to;

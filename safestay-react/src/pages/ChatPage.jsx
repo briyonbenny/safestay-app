@@ -16,6 +16,21 @@ const REPLY_AS_STUDENT = [
 const pickReply = (list) => list[Math.floor(Math.random() * list.length)];
 
 /**
+ * True if this message was sent by the logged-in user (API returns from.id; session may only have email until /api/auth/me runs).
+ */
+const isMineMessage = (m, user) => {
+  if (!user || !m?.from) return false;
+  const fromId = m.from.id;
+  if (fromId != null && user.id != null && String(fromId) === String(user.id)) return true;
+  const fe = m.from.email;
+  const ue = user.email;
+  if (fe && ue && String(fe).toLowerCase() === String(ue).toLowerCase()) return true;
+  // Mock mode uses from.id = email; API may briefly render before user.id is hydrated from /api/auth/me
+  if (fromId != null && ue && String(fromId).toLowerCase() === String(ue).toLowerCase()) return true;
+  return false;
+};
+
+/**
  * Messages: with VITE_USE_API, real threads via /api/messages; otherwise a short mock chat.
  */
 export const ChatPage = () => {
@@ -231,8 +246,7 @@ export const ChatPage = () => {
             {loadErr && <p className="form-error">{loadErr}</p>}
             <div className="chat-window" role="log">
               {messages.map((m) => {
-                const fromId = m.from?.id;
-                const mine = fromId && user.id && String(fromId) === String(user.id);
+                const mine = isMineMessage(m, user);
                 return (
                   <div key={m._id} className={`bubble${mine ? ' bubble--me' : ' bubble--them'}`}>
                     {m.text}
@@ -284,7 +298,7 @@ export const ChatPage = () => {
       <p className="lede">Enable the API in .env to use real messaging between students and owners.</p>
       <div className="chat-window" role="log">
         {messages.map((m) => {
-          const mine = m.from?.id && user.id && (String(m.from.id) === String(user.id) || m.from.id === user.email);
+          const mine = isMineMessage(m, user);
           return (
             <div key={m._id} className={`bubble${mine ? ' bubble--me' : ' bubble--them'}`}>
               {m.text}
