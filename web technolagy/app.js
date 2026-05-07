@@ -36,6 +36,14 @@ app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
 function registerRoutes() {
+  // Liveness for Render / probes — before attachCurrentUser (no session required).
+  app.get("/health", (req, res) => {
+    res.status(200).json({ ok: true, app: "SafeStay API" });
+  });
+  app.get("/api/health", (req, res) => {
+    res.status(200).json({ ok: true, app: "SafeStay API" });
+  });
+
   app.use(attachCurrentUser);
 
   // Stop caching HTML in dev so template edits show up.
@@ -62,7 +70,7 @@ function registerRoutes() {
     res.status(200).json({
       name: "SafeStay API",
       hint: "GET /api/listings",
-      routes: ["/api/auth", "/api/listings", "/api/messages/threads", "/api/messages", "/health"],
+      routes: ["/api/auth", "/api/listings", "/api/messages/threads", "/api/messages", "/health", "/api/health"],
     });
   });
   app.use("/api/auth", apiAuthRoutes);
@@ -181,10 +189,6 @@ async function start() {
       store: sessionStore,
     })
   );
-
-  app.get("/health", (req, res) => {
-    res.status(200).json({ ok: true, app: "SafeStay API" });
-  });
 
   app.use(express.urlencoded({ extended: true }));
   app.use(express.json({ limit: "12mb" }));

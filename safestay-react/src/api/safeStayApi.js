@@ -3,18 +3,23 @@ const base = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 function networkHint(requestUrl) {
   if (base) {
-    let renderNote = "";
     if (typeof window !== "undefined") {
       try {
-        if (new URL(base).origin === window.location.origin) {
-          renderNote =
-            " VITE_API_BASE_URL must be your Render Web Service URL (the Node API), not this static site.";
+        const apiHost = new URL(base).hostname;
+        if (apiHost === window.location.hostname) {
+          return (
+            `Misconfiguration: VITE_API_BASE_URL is set to this static site (${base}). ` +
+              `It must be your separate Render Web Service URL where the Node/Express API runs (different *.onrender.com host), ` +
+              `for example https://YOUR-API-SERVICE.onrender.com. ` +
+              `Render dashboard → your static site → Environment → change VITE_API_BASE_URL → Clear build cache → redeploy. ` +
+              `(${requestUrl})`
+          );
         }
       } catch {
-        /* ignore invalid base */
+        /* fall through */
       }
     }
-    return `No response from ${base}. Is the API running and is this URL correct? (${requestUrl})${renderNote}`;
+    return `No response from ${base}. Is the API running and is this URL correct? (${requestUrl})`;
   }
   let localNote =
     " Start the API in ../web technolagy (npm start), check the URL, and that Windows Firewall allows Node on port 3000.";
