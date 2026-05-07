@@ -106,25 +106,50 @@ function createSessionStore() {
 async function start() {
   await connectDatabase();
 
-  const clientOrigin = (process.env.CLIENT_ORIGIN || "").trim();
   const nodeEnv = process.env.NODE_ENV || "development";
   const isProd = nodeEnv === "production";
+
+  /** Multiple frontends (Render static + local Vite): comma-separated, no trailing slash. */
+  const clientOrigins = (process.env.CLIENT_ORIGIN || "")
+    .split(",")
+    .map((s) => s.trim().replace(/\/$/, ""))
+    .filter(Boolean);
+  const allowLocalhostCors =
+    String(process.env.CORS_ALLOW_LOCALHOST || "").toLowerCase() === "true" ||
+    String(process.env.CORS_ALLOW_LOCALHOST || "") === "1";
+
   /**
    * SameSite=None + Secure is only valid on https. If CLIENT_ORIGIN is set while developing on http://localhost,
    * forcing Secure makes the browser drop the session cookie — login looks OK but GET /api/auth/me returns 401.
    * Apply cross-site session rules only in production.
    */
-  const crossSiteSession = Boolean(clientOrigin) && isProd;
+  const crossSiteSession = clientOrigins.length > 0 && isProd;
   const sessionCookieSecure =
     crossSiteSession ||
     (isProd &&
       !crossSiteSession &&
       String(process.env.SESSION_INSECURE_COOKIES || "").toLowerCase() !== "true");
 
-  /** When CLIENT_ORIGIN is unset: production keeps previous behaviour; dev allows typical Vite origins. */
+  function isLocalDevOrigin(origin) {
+    return (
+      /^http:\/\/localhost(?::\d+)?$/i.test(origin) || /^http:\/\/127\.0\.0\.1(?::\d+)?$/i.test(origin)
+    );
+  }
+
+  /**
+   * CORS: explicit CLIENT_ORIGIN list (e.g. Render site + optional http://localhost:5173), or dev defaults.
+   * Set CORS_ALLOW_LOCALHOST=true on the API (e.g. Render) to allow local Vite without listing every port.
+   */
   function corsOrigin() {
-    if (clientOrigin) return clientOrigin;
-    if (nodeEnv === "production") return true;
+    if (clientOrigins.length > 0) {
+      return (origin, cb) => {
+        if (!origin) return cb(null, true);
+        if (clientOrigins.includes(origin)) return cb(null, true);
+        if (allowLocalhostCors && isLocalDevOrigin(origin)) return cb(null, true);
+        return cb(null, false);
+      };
+    }
+    if (isProd) return true;
     return (origin, cb) => {
       if (!origin) return cb(null, true);
       const allowed =
@@ -134,6 +159,11 @@ async function start() {
         /^https?:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}(?::\d+)?$/i.test(origin);
       cb(null, allowed);
     };
+  }
+
+  if (clientOrigins.length > 0) {
+    // eslint-disable-next-line no-console
+    console.log(`CORS: allowing origins: ${clientOrigins.join(", ")}${allowLocalhostCors ? " + localhost/127.0.0.1 (http)" : ""}`);
   }
 
   // CORS first (preflight), then cookies + session before body parsers (recommended for express-session).
