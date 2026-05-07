@@ -71,6 +71,18 @@ export const RegisterPage = () => {
         }
         if (data.user) {
           await applyServerUser(data.user);
+          let meRes = await apiFetch('/api/auth/me');
+          for (let attempt = 0; attempt < 5 && meRes.status === 401; attempt++) {
+            await new Promise((r) => setTimeout(r, 120 * (attempt + 1)));
+            meRes = await apiFetch('/api/auth/me');
+          }
+          if (!meRes.ok) {
+            setError(
+              'Account was created. Open Log in and sign in with your new email and password — if this keeps happening, use http://localhost:5173 and ensure VITE_API_BASE_URL matches in .env.development.'
+            );
+            navigate('/auth/login');
+            return;
+          }
         }
         navigate('/listings');
       } catch (err) {

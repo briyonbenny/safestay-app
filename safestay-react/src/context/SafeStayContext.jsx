@@ -46,8 +46,9 @@ const readSession = () => {
     const raw = localStorage.getItem(USER_KEY);
     if (!raw) return null;
     const p = JSON.parse(raw);
-    if (p && typeof p.email === 'string' && (p.role === 'student' || p.role === 'owner')) {
-      return p;
+    const role = String(p?.role || '').toLowerCase();
+    if (p && typeof p.email === 'string' && (role === 'student' || role === 'owner')) {
+      return { ...p, role };
     }
   } catch {
     /* ignore */
@@ -60,6 +61,7 @@ const SafeStayContext = createContext(null);
 export const SafeStayProvider = ({ children }) => {
   const apiMode = isApiModeEnabled();
   const [listings, setListings] = useState(() => (apiMode ? [] : loadMockListingsFromStorage()));
+  // Optimistic UI from localStorage; GET /api/auth/me on load clears stale rows if the session cookie is missing.
   const [user, setUser] = useState(() => readSession());
   const [apiReady, setApiReady] = useState(!apiMode);
   const [favouriteIds, setFavouriteIds] = useState(() => {
@@ -72,11 +74,15 @@ export const SafeStayProvider = ({ children }) => {
   });
 
   const loadListingsFromApi = useCallback(async () => {
-    const res = await apiFetch('/api/listings');
-    if (!res.ok) return;
-    const data = await res.json();
-    const rows = data.listings || [];
-    setListings(rows.map(mapApiListingToCard).filter(Boolean));
+    try {
+      const res = await apiFetch('/api/listings');
+      if (!res.ok) return;
+      const data = await res.json().catch(() => ({}));
+      const rows = data.listings || [];
+      setListings(rows.map(mapApiListingToCard).filter(Boolean));
+    } catch {
+      /* network / parse — do not throw; callers must not hang waiting on apiReady */
+    }
   }, []);
 
   const applyServerUser = useCallback(
@@ -123,14 +129,41 @@ export const SafeStayProvider = ({ children }) => {
     }
   }, []);
 
+  /** After mutations, refresh profile without logging out on a single failed /me (avoids false “logged out” after success). */
+  const softSyncUserFromServer = useCallback(async () => {
+    if (!isApiModeEnabled()) return;
+    try {
+      const r = await apiFetch('/api/auth/me');
+      if (!r.ok) return;
+      const { user: u } = await r.json();
+      if (u) {
+        const next = { email: u.email, role: u.role, fullName: u.fullName, id: u.id };
+        setUser(next);
+        try {
+          localStorage.setItem(USER_KEY, JSON.stringify(next));
+        } catch {
+          /* */
+        }
+      }
+    } catch {
+      /* offline */
+    }
+  }, []);
+
   useEffect(() => {
     if (!isApiModeEnabled()) {
       return;
     }
     let cancel = false;
     (async () => {
-      await Promise.all([refreshMe(), loadListingsFromApi()]);
-      if (!cancel) setApiReady(true);
+      try {
+        await refreshMe();
+        if (!cancel) await loadListingsFromApi();
+      } catch {
+        /* refreshMe/loadListings should not throw; guard anyway */
+      } finally {
+        if (!cancel) setApiReady(true);
+      }
     })();
     return () => {
       cancel = true;
@@ -176,33 +209,58 @@ export const SafeStayProvider = ({ children }) => {
         return newItem;
       }
 
-      const form = new FormData();
-      form.set('title', String(payload.title));
-      form.set('location', String(payload.location));
-      form.set('propertyType', String(payload.propertyType));
-      form.set('description', String(payload.description));
-      form.set('price', String(payload.price));
-      form.set('isVerified', payload.isVerified ? 'true' : 'false');
-      if (Array.isArray(payload.imageFiles)) {
-        payload.imageFiles.forEach((file) => {
-          if (file) form.append('images', file);
-        });
+      let imagesDataUrls = [];
+      if (Array.isArray(payload.imageFiles) && payload.imageFiles.length) {
+        const slice = payload.imageFiles.slice(0, 8);
+        try {
+          imagesDataUrls = await Promise.all(
+            slice.map(
+              (file) =>
+                new Promise((resolve, reject) => {
+                  const fr = new FileReader();
+                  fr.onload = () => resolve(fr.result);
+                  fr.onerror = () => reject(new Error('Could not read a photo file.'));
+                  fr.readAsDataURL(file);
+                })
+            )
+          );
+        } catch (readErr) {
+          throw new Error(readErr && readErr.message ? readErr.message : 'Could not read photos.');
+        }
       }
 
-      const base = getApiBase();
-      const res = await fetch(
-        base ? `${base}/api/listings` : '/api/listings',
-        { method: 'POST', body: form, credentials: 'include' }
-      );
+      const res = await apiFetch('/api/listings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: String(payload.title),
+          location: String(payload.location),
+          propertyType: String(payload.propertyType),
+          description: String(payload.description),
+          price: Number(payload.price),
+          isVerified: Boolean(payload.isVerified),
+          imagesDataUrls,
+        }),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (res.status === 401) {
+          throw new Error(
+            data.error ||
+              'Session expired or not recognised. Log out, log in again as a property owner, then publish.'
+          );
+        }
         throw new Error(data.error || data.errors?.[0] || 'Could not create listing.');
       }
       const created = mapApiListingToCard(data.listing);
+      if (!created?.id) {
+        throw new Error('Server did not return the new listing. Try again.');
+      }
       setListings((prev) => [created, ...prev]);
+      await softSyncUserFromServer();
       return created;
     },
-    [user?.email]
+    [user?.email, softSyncUserFromServer]
   );
 
   const deleteListing = useCallback(async (id) => {
@@ -286,6 +344,32 @@ export const SafeStayProvider = ({ children }) => {
           } catch {
             /* */
           }
+        }
+        let me = await apiFetch('/api/auth/me');
+        for (let attempt = 0; attempt < 5 && me.status === 401; attempt++) {
+          await new Promise((r) => setTimeout(r, 120 * (attempt + 1)));
+          me = await apiFetch('/api/auth/me');
+        }
+        if (me.ok) {
+          const body = await me.json().catch(() => ({}));
+          const u2 = body.user;
+          if (u2) {
+            const next = { email: u2.email, role: u2.role, fullName: u2.fullName, id: u2.id };
+            setUser(next);
+            try {
+              localStorage.setItem(USER_KEY, JSON.stringify(next));
+            } catch {
+              /* */
+            }
+          }
+        } else if (su) {
+          const api = getApiBase() || 'same origin /api (Vite proxy)';
+          throw new Error(
+            'The server accepted your password but your browser did not keep the session cookie. ' +
+              `Use one host for the app and API (e.g. open http://localhost:5173 with VITE_API_BASE_URL matching your API port in .env.development — currently ${api}). ` +
+              'On the API: leave CLIENT_ORIGIN unset for local http:// (or cookies use Secure and are dropped). ' +
+              'Restart the API and npm run dev, then try Log in again.'
+          );
         }
         await loadListingsFromApi();
         return;

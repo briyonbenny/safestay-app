@@ -34,18 +34,7 @@ if (!mongoUri) {
   process.exit(1);
 }
 
-// First route: no body parsing, no static, no session — keeps Render / load-balancer checks fast.
-app.get("/health", (req, res) => {
-  res.status(200).json({ ok: true, app: "SafeStay API" });
-});
-
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-app.use(cookieParser());
-app.use(methodOverride("_method"));
-app.use(express.static(path.join(__dirname, "public")));
-
-// Configure view engine for server-rendered pages.
+// Configure view engine for server-rendered pages (before listen).
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
@@ -118,13 +107,44 @@ async function start() {
   await connectDatabase();
 
   const clientOrigin = (process.env.CLIENT_ORIGIN || "").trim();
-  const crossSiteClient = Boolean(clientOrigin);
+  const nodeEnv = process.env.NODE_ENV || "development";
+  const isProd = nodeEnv === "production";
+  /**
+   * SameSite=None + Secure is only valid on https. If CLIENT_ORIGIN is set while developing on http://localhost,
+   * forcing Secure makes the browser drop the session cookie — login looks OK but GET /api/auth/me returns 401.
+   * Apply cross-site session rules only in production.
+   */
+  const crossSiteSession = Boolean(clientOrigin) && isProd;
+  const sessionCookieSecure =
+    crossSiteSession ||
+    (isProd &&
+      !crossSiteSession &&
+      String(process.env.SESSION_INSECURE_COOKIES || "").toLowerCase() !== "true");
+
+  /** When CLIENT_ORIGIN is unset: production keeps previous behaviour; dev allows typical Vite origins. */
+  function corsOrigin() {
+    if (clientOrigin) return clientOrigin;
+    if (nodeEnv === "production") return true;
+    return (origin, cb) => {
+      if (!origin) return cb(null, true);
+      const allowed =
+        /^https?:\/\/localhost(?::\d+)?$/i.test(origin) ||
+        /^https?:\/\/127\.0\.0\.1(?::\d+)?$/i.test(origin) ||
+        /^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}(?::\d+)?$/i.test(origin) ||
+        /^https?:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}(?::\d+)?$/i.test(origin);
+      cb(null, allowed);
+    };
+  }
+
+  // CORS first (preflight), then cookies + session before body parsers (recommended for express-session).
   app.use(
     cors({
-      origin: clientOrigin || true,
+      origin: corsOrigin(),
       credentials: true,
     })
   );
+
+  app.use(cookieParser());
 
   const sessionStore = createSessionStore();
 
@@ -136,14 +156,24 @@ async function start() {
       saveUninitialized: false,
       cookie: {
         httpOnly: true,
-        // Separate React static site on another origin needs SameSite=None + Secure
-        sameSite: crossSiteClient ? "none" : "lax",
-        secure: crossSiteClient || process.env.NODE_ENV === "production",
+        path: "/",
+        // Deployed static site on another origin needs SameSite=None + Secure (production only; see crossSiteSession).
+        sameSite: crossSiteSession ? "none" : "lax",
+        secure: sessionCookieSecure,
         maxAge: 1000 * 60 * 60 * 24, // 1 day
       },
       store: sessionStore,
     })
   );
+
+  app.get("/health", (req, res) => {
+    res.status(200).json({ ok: true, app: "SafeStay API" });
+  });
+
+  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: "12mb" }));
+  app.use(methodOverride("_method"));
+  app.use(express.static(path.join(__dirname, "public")));
 
   registerRoutes();
 

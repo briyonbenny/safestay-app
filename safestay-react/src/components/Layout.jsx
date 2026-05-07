@@ -7,7 +7,7 @@ import { getApiBase, isApiModeEnabled } from '../api/safeStayApi.js';
  * Shell: top navigation, responsive drawer, and footer. Mobile menu toggles on small screens.
  */
 export const Layout = () => {
-  const { user, logout } = useSafeStay();
+  const { user, logout, apiMode, apiReady } = useSafeStay();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const linkClass = ({ isActive }) =>
@@ -88,7 +88,11 @@ export const Layout = () => {
             <NavLink to="/chat" className={linkClass} onClick={onNavigate}>
               Chat
             </NavLink>
-            {user ? (
+            {apiMode && !apiReady ? (
+              <span className="user-chip" aria-live="polite">
+                Checking session…
+              </span>
+            ) : user ? (
               <>
                 <span className="user-chip" title="Signed in">
                   {user.email} · {user.role === 'owner' ? 'Host' : 'Student'}

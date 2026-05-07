@@ -1,9 +1,17 @@
 /**
  * API helpers for the SafeStay Node backend (Express app in ../web technolagy at repo root).
- * When VITE_API_BASE_URL is set, requests go there (production: Render static + Web Service).
- * In dev, .env.development sets VITE_USE_API; leave BASE unset so Vite proxies /api → localhost:3000.
+ * Production: set VITE_API_BASE_URL to your API URL (Render).
+ * Local dev: .env.development sets VITE_API_BASE_URL=http://localhost:3000 so session cookies work with login
+ * (the Vite /api proxy often loses Set-Cookie). Match localhost vs 127.0.0.1 with the URL you use in the browser.
  */
 const base = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+
+function networkHint(requestUrl) {
+  if (base) {
+    return `Cannot reach ${base}. Start the API in ../web technolagy (npm start), check the URL, and that Windows Firewall allows Node on port 3000. (Request: ${requestUrl})`;
+  }
+  return `Cannot reach /api (Vite proxies to port 3000). Start the API in ../web technolagy (npm start), then restart npm run dev. (Request: ${requestUrl})`;
+}
 
 const truthyEnv = (v) => {
   const s = String(v == null ? "" : v).trim().toLowerCase();
@@ -26,14 +34,24 @@ export const apiUrl = (path) => {
 };
 
 export async function apiFetch(path, options = {}) {
-  const res = await fetch(apiUrl(path), {
-    ...options,
-    credentials: "include",
-    headers: {
-      ...options.headers,
-    },
-  });
-  return res;
+  const url = apiUrl(path);
+  try {
+    return await fetch(url, {
+      ...options,
+      credentials: "include",
+      headers: {
+        ...options.headers,
+      },
+    });
+  } catch (e) {
+    const looksNetwork =
+      e instanceof TypeError ||
+      (typeof e?.message === "string" && /failed to fetch|networkerror|load failed/i.test(e.message));
+    if (looksNetwork) {
+      throw new Error(networkHint(url));
+    }
+    throw e;
+  }
 }
 
 export function mapApiListingToCard(row) {

@@ -16,6 +16,34 @@ function publicUser(userDoc) {
   };
 }
 
+/**
+ * Persist session before sending JSON so MongoStore has finished writing
+ * before the next request (fixes "logged in then immediately logged out").
+ * We avoid session.regenerate() here — it can confuse some dev proxies / browsers with Set-Cookie.
+ */
+function commitAuthSession(req, res, userDoc, statusCode, jsonBody) {
+  req.session.user = {
+    id: userDoc._id,
+    fullName: userDoc.fullName,
+    email: userDoc.email,
+    role: userDoc.role,
+  };
+  req.session.save((saveErr) => {
+    if (saveErr) {
+      // eslint-disable-next-line no-console
+      console.error("Session save error:", saveErr.message);
+      return res.status(500).json({ error: "Could not save session." });
+    }
+    res.cookie("lastLoginEmail", userDoc.email, {
+      maxAge: 1000 * 60 * 60 * 24 * 30,
+      httpOnly: false,
+      sameSite: "lax",
+      path: "/",
+    });
+    return res.status(statusCode).json(jsonBody);
+  });
+}
+
 router.post("/signup", async (req, res) => {
   const errors = validateSignup(req.body);
   if (errors.length > 0) {
@@ -36,20 +64,7 @@ router.post("/signup", async (req, res) => {
       role: req.body.role,
     });
 
-    req.session.user = {
-      id: user._id,
-      fullName: user.fullName,
-      email: user.email,
-      role: user.role,
-    };
-
-    res.cookie("lastLoginEmail", user.email, {
-      maxAge: 1000 * 60 * 60 * 24 * 30,
-      httpOnly: false,
-      sameSite: "lax",
-    });
-
-    return res.status(201).json({ ok: true, user: publicUser(user) });
+    commitAuthSession(req, res, user, 201, { ok: true, user: publicUser(user) });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("API signup error:", err.message);
@@ -74,20 +89,7 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid email or password." });
     }
 
-    req.session.user = {
-      id: user._id,
-      fullName: user.fullName,
-      email: user.email,
-      role: user.role,
-    };
-
-    res.cookie("lastLoginEmail", user.email, {
-      maxAge: 1000 * 60 * 60 * 24 * 30,
-      httpOnly: false,
-      sameSite: "lax",
-    });
-
-    return res.status(200).json({ ok: true, user: publicUser(user) });
+    commitAuthSession(req, res, user, 200, { ok: true, user: publicUser(user) });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("API login error:", err.message);

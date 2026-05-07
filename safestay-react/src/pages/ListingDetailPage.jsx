@@ -10,7 +10,7 @@ import { validateRequired } from '../utils/validation.js';
 export const ListingDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { listings, isFavourite, toggleFavourite, user, deleteListing } = useSafeStay();
+  const { listings, isFavourite, toggleFavourite, user, deleteListing, apiMode, apiReady } = useSafeStay();
   const listing = listings.find((l) => l.id === id);
 
   const [showReport, setShowReport] = useState(false);
@@ -107,7 +107,12 @@ export const ListingDetailPage = () => {
         </div>
         <aside className="detail-aside">
           <div className="stack">
-            {!user && (
+            {apiMode && !apiReady && (
+              <p className="lede" role="status">
+                Checking your session…
+              </p>
+            )}
+            {!user && !(apiMode && !apiReady) && (
               <Link to="/auth/login" className="button button--secondary" state={{ from: `/listings/${listing.id}` }}>
                 Log in to message the owner
               </Link>

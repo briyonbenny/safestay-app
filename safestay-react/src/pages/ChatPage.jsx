@@ -319,7 +319,11 @@ export const ChatPage = () => {
           <strong>Regarding:</strong> {fromListing}
         </p>
       )}
-      <p className="lede">Enable the API in .env to use real messaging between students and owners.</p>
+      <p className="lede">
+        Enable the API: in <code>safestay-react/.env</code> set <code>VITE_USE_API=true</code> (this repo
+        includes it), restart <code>npm run dev</code>, and run the Node API in <code>../web technolagy</code>{' '}
+        on port 3000. For a production build, also set <code>VITE_API_BASE_URL</code> to your live API URL.
+      </p>
       <div className="chat-window" role="log">
         {messages.map((m) => {
           const mine = isMineMessage(m, user);

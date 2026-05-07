@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSafeStay } from '../context/SafeStayContext.jsx';
 import { validatePrice, validateRequired } from '../utils/validation.js';
-import { isApiModeEnabled } from '../api/safeStayApi.js';
+import { apiFetch, isApiModeEnabled } from '../api/safeStayApi.js';
 
 const TYPES = ['Room', 'Apartment', 'Studio', 'House'];
 
@@ -16,8 +16,10 @@ const PREFILL_DESC =
  * VIEW: New property. Optional photos (up to 8) when using the real API; mock can attach previews.
  */
 export const CreateListingPage = () => {
-  const { user, addListing } = useSafeStay();
+  const { user, addListing, apiMode, apiReady, logout } = useSafeStay();
   const nav = useNavigate();
+  /** API: confirm /api/auth/me sees an owner — localStorage alone is not enough (avoids false "owner" + 401 on publish). */
+  const [ownerServerGate, setOwnerServerGate] = useState(() => (isApiModeEnabled() ? 'checking' : 'ok'));
   const [title, setTitle] = useState(PREFILL_TITLE);
   const [location, setLocation] = useState(PREFILL_LOCATION);
   const [propertyType, setPropertyType] = useState('Room');
@@ -28,13 +30,91 @@ export const CreateListingPage = () => {
   const [error, setError] = useState('');
   const [showPreview, setShowPreview] = useState(true);
 
-  if (user?.role !== 'owner') {
+  useEffect(() => {
+    if (!apiMode) {
+      setOwnerServerGate('ok');
+      return;
+    }
+    if (!apiReady) return;
+    const ownerRole = String(user?.role || '').toLowerCase() === 'owner';
+    if (!ownerRole) {
+      setOwnerServerGate('idle');
+      return;
+    }
+    let cancelled = false;
+    setOwnerServerGate('checking');
+    (async () => {
+      try {
+        const r = await apiFetch('/api/auth/me');
+        if (cancelled) return;
+        if (r.status === 401) {
+          logout();
+          setOwnerServerGate('fail');
+          return;
+        }
+        if (!r.ok) {
+          setOwnerServerGate('fail');
+          return;
+        }
+        const data = await r.json().catch(() => ({}));
+        if (cancelled) return;
+        const u = data.user;
+        if (!u || String(u.role || '').toLowerCase() !== 'owner') {
+          setOwnerServerGate('fail');
+          return;
+        }
+        setOwnerServerGate('ok');
+      } catch {
+        if (!cancelled) setOwnerServerGate('fail');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiMode, apiReady, user?.email, user?.role, logout]);
+
+  if (apiMode && !apiReady) {
+    return (
+      <div className="page form-page">
+        <h1>Add a property</h1>
+        <p className="form-page__intro">Checking your session with the server…</p>
+      </div>
+    );
+  }
+
+  const ownerRole = String(user?.role || '').toLowerCase() === 'owner';
+  if (!ownerRole) {
     return (
       <div className="page form-page">
         <h1>Owner access</h1>
         <p>Sign in with a <strong>Property owner</strong> account to list a place. Register and choose that role, then come back here.</p>
         <p>
           <Link to="/auth/register">Register as owner</Link> or <Link to="/auth/login">log in</Link>.
+        </p>
+      </div>
+    );
+  }
+
+  if (apiMode && ownerServerGate === 'checking') {
+    return (
+      <div className="page form-page">
+        <h1>Add a property</h1>
+        <p className="form-page__intro">Checking your account with the server…</p>
+      </div>
+    );
+  }
+
+  if (apiMode && ownerServerGate === 'fail') {
+    return (
+      <div className="page form-page">
+        <h1>Add a property</h1>
+        <p className="form-error" role="alert">
+          The server does not have an active owner session for this browser. Log out, then log in again as a
+          <strong> property owner</strong>. Use one address only (e.g. <code>http://localhost:5173</code>, not{' '}
+          <code>127.0.0.1</code>). Start the API in <code>../web technolagy</code> with <code>npm start</code>.
+        </p>
+        <p>
+          <Link to="/auth/login">Log in</Link> · <Link to="/">Home</Link>
         </p>
       </div>
     );
@@ -76,6 +156,29 @@ export const CreateListingPage = () => {
 
     try {
       if (isApiModeEnabled()) {
+        const me = await apiFetch('/api/auth/me');
+        if (!me.ok) {
+          const d = await me.json().catch(() => ({}));
+          if (me.status === 401) {
+            logout();
+            setError(
+              d.error ||
+                'Not signed in on the server. Use Log in below, choose Property owner, then try Add property again.'
+            );
+            return;
+          }
+          setError(
+            d.error ||
+              'Could not verify your session. Is the API running on port 3000? Restart npm run dev after starting the API.'
+          );
+          return;
+        }
+        const { user: su } = await me.json();
+        if (!su || String(su.role || '').toLowerCase() !== 'owner') {
+          setError('This account is not a property owner on the server. Log in with an owner account.');
+          return;
+        }
+
         const created = await addListing({
           title: t.value,
           location: l.value,

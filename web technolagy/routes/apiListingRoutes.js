@@ -4,7 +4,7 @@ const Listing = require("../models/Listing");
 const User = require("../models/User");
 const { requireAuthApi, requireRoleApi, normaliseRole } = require("../middleware/auth");
 const { validateListing } = require("../middleware/validation");
-const { upload, uploadPathsFromFiles } = require("../config/listingUpload");
+const { upload, uploadPathsFromFiles, saveDataUrlListingImages } = require("../config/listingUpload");
 
 const router = express.Router();
 
@@ -96,19 +96,27 @@ router.get("/mine", requireAuthApi, requireRoleApi("owner"), async (req, res) =>
   }
 });
 
-// Only property owners may create listings. multipart: fields + files field name "images".
+// Only property owners may create listings.
+// Prefer JSON + optional imagesDataUrls (same session behaviour as login; works through Vite proxy).
+// Multipart (field "images") remains for tools like Bruno.
+function maybeMultipartListingImages(req, res, next) {
+  const ct = String(req.headers["content-type"] || "");
+  if (ct.includes("multipart/form-data")) {
+    return upload.array("images", 8)(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({ error: err.message || "Image upload failed." });
+      }
+      return next();
+    });
+  }
+  return next();
+}
+
 router.post(
   "/",
   requireAuthApi,
   requireRoleApi("owner"),
-  (req, res, next) => {
-    upload.array("images", 8)(req, res, (err) => {
-      if (err) {
-        return res.status(400).json({ error: err.message || "Image upload failed." });
-      }
-      next();
-    });
-  },
+  maybeMultipartListingImages,
   async (req, res) => {
     const live = await User.findById(req.session.user.id).select("role").lean();
     if (!live || normaliseRole(live.role) !== "owner") {
@@ -121,7 +129,15 @@ router.post(
       return res.status(400).json({ errors });
     }
 
-    const imagePaths = uploadPathsFromFiles(req);
+    let imagePaths = uploadPathsFromFiles(req);
+    if (
+      imagePaths.length === 0 &&
+      req.body &&
+      Array.isArray(req.body.imagesDataUrls) &&
+      req.body.imagesDataUrls.length > 0
+    ) {
+      imagePaths = saveDataUrlListingImages(req.body.imagesDataUrls);
+    }
 
     try {
       const listing = await Listing.create({

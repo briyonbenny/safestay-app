@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Secrets and machine-specific overrides (keep .env.development / .env.example in repo as templates)
+.env
+.env.local
+.env.*.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
