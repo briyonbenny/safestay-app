@@ -3,9 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useSafeStay } from '../context/SafeStayContext.jsx';
 import { getApiBase, isApiModeEnabled } from '../api/safeStayApi.js';
 
-/**
- * Shell: top navigation, responsive drawer, and footer. Mobile menu toggles on small screens.
- */
+/** App chrome: header, nav, outlet. */
 export const Layout = () => {
   const { user, logout, apiMode, apiReady } = useSafeStay();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -28,14 +26,12 @@ export const Layout = () => {
       </a>
       {showDemoOnProd && (
         <div className="deploy-banner" role="status">
-          <strong>Demo mode on production:</strong> add build environment variables on your Render static site, then redeploy:{' '}
-          <code>VITE_USE_API=true</code> and <code>VITE_API_BASE_URL=https://your-backend.onrender.com</code> (no trailing slash).
-          Chat and listings then use your live API and MongoDB.
+          <strong>Production demo:</strong> set <code>VITE_USE_API=true</code> and <code>VITE_API_BASE_URL</code> on the static build, redeploy.
         </div>
       )}
       {showMissingApiUrl && (
         <div className="deploy-banner deploy-banner--warn" role="alert">
-          <strong>API URL missing:</strong> set <code>VITE_API_BASE_URL</code> on Render to your Web Service URL (same place as <code>VITE_USE_API</code>), save, and trigger a new deploy.
+          <strong>Missing API URL:</strong> add <code>VITE_API_BASE_URL</code> to the static site build env and redeploy.
         </div>
       )}
       <header className="site-header">

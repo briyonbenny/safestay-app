@@ -1,27 +1,35 @@
-/**
- * API helpers for the SafeStay Node backend (Express app in ../web technolagy at repo root).
- * Production: set VITE_API_BASE_URL to your API URL (Render).
- * Local dev: .env.development sets VITE_API_BASE_URL=http://localhost:3000 so session cookies work with login
- * (the Vite /api proxy often loses Set-Cookie). Match localhost vs 127.0.0.1 with the URL you use in the browser.
- */
+// Fetch wrapper: session cookies, optional absolute base from VITE_API_BASE_URL.
 const base = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 function networkHint(requestUrl) {
   if (base) {
-    return `Cannot reach ${base}. Start the API in ../web technolagy (npm start), check the URL, and that Windows Firewall allows Node on port 3000. (Request: ${requestUrl})`;
+    let renderNote = "";
+    if (typeof window !== "undefined") {
+      try {
+        if (new URL(base).origin === window.location.origin) {
+          renderNote =
+            " VITE_API_BASE_URL must be your Render Web Service URL (the Node API), not this static site.";
+        }
+      } catch {
+        /* ignore invalid base */
+      }
+    }
+    return `No response from ${base}. Is the API running and is this URL correct? (${requestUrl})${renderNote}`;
   }
-  return `Cannot reach /api (Vite proxies to port 3000). Start the API in ../web technolagy (npm start), then restart npm run dev. (Request: ${requestUrl})`;
+  let localNote =
+    " Start the API in ../web technolagy (npm start), check the URL, and that Windows Firewall allows Node on port 3000.";
+  if (typeof window !== "undefined" && /\.onrender\.com$/i.test(window.location.hostname)) {
+    localNote =
+      " On Render, a static site cannot run /api. Deploy ../web technolagy as a separate Web Service, set MONGODB_URI and CLIENT_ORIGIN, set VITE_API_BASE_URL to that API URL, then redeploy this static site.";
+  }
+  return `Cannot reach ${typeof window !== "undefined" ? window.location.origin : ""} (relative /api).${localNote} (Request: ${requestUrl})`;
 }
-
 const truthyEnv = (v) => {
   const s = String(v == null ? "" : v).trim().toLowerCase();
   return s === "true" || s === "1" || s === "yes";
 };
 
-/**
- * When true, app uses the Node API (session cookies + Mongo) for listings, auth, and messaging.
- * Set on Render (build env): VITE_USE_API=true and VITE_API_BASE_URL=https://your-api.onrender.com
- */
+/** True when the bundle should talk to the Node backend (env flag or base URL set). */
 export const isApiModeEnabled = () =>
   truthyEnv(import.meta.env.VITE_USE_API) || Boolean(String(import.meta.env.VITE_API_BASE_URL || "").trim());
 
@@ -65,7 +73,6 @@ export function mapApiListingToCard(row) {
     description: row.description,
     isVerified: Boolean(row.isVerified),
     ownerName: row.owner?.fullName || row.owner?.email || "Host",
-    /** Present when using API; used to show delete / owner-only actions */
     ownerId: (() => {
       const o = row.owner;
       if (!o) return null;

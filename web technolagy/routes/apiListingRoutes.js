@@ -1,4 +1,4 @@
-// JSON API routes for listings (session cookie for auth; RBAC for create).
+// Listings JSON API.
 const express = require("express");
 const Listing = require("../models/Listing");
 const User = require("../models/User");
@@ -97,8 +97,7 @@ router.get("/mine", requireAuthApi, requireRoleApi("owner"), async (req, res) =>
 });
 
 // Only property owners may create listings.
-// Prefer JSON + optional imagesDataUrls (same session behaviour as login; works through Vite proxy).
-// Multipart (field "images") remains for tools like Bruno.
+// JSON body + optional base64 images, or multipart when content-type says so.
 function maybeMultipartListingImages(req, res, next) {
   const ct = String(req.headers["content-type"] || "");
   if (ct.includes("multipart/form-data")) {

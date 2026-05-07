@@ -10,7 +10,7 @@ import {
 const FAV_KEY = 'safestay_favourites_v1';
 const USER_KEY = 'safestay_session_v1';
 const ROLES_KEY = 'safestay_account_roles_v1';
-/** When not using the Node API, keep listings in localStorage so refresh keeps your properties. */
+/** Mock mode: persist listings in the browser. */
 const MOCK_LISTINGS_KEY = 'safestay_listings_v1';
 
 const loadMockListingsFromStorage = () => {
@@ -61,7 +61,7 @@ const SafeStayContext = createContext(null);
 export const SafeStayProvider = ({ children }) => {
   const apiMode = isApiModeEnabled();
   const [listings, setListings] = useState(() => (apiMode ? [] : loadMockListingsFromStorage()));
-  // Optimistic UI from localStorage; GET /api/auth/me on load clears stale rows if the session cookie is missing.
+  // localStorage may be ahead of the server; refreshMe fixes that.
   const [user, setUser] = useState(() => readSession());
   const [apiReady, setApiReady] = useState(!apiMode);
   const [favouriteIds, setFavouriteIds] = useState(() => {
@@ -81,7 +81,7 @@ export const SafeStayProvider = ({ children }) => {
       const rows = data.listings || [];
       setListings(rows.map(mapApiListingToCard).filter(Boolean));
     } catch {
-      /* network / parse — do not throw; callers must not hang waiting on apiReady */
+      /* ignore listing load errors */
     }
   }, []);
 
@@ -129,7 +129,7 @@ export const SafeStayProvider = ({ children }) => {
     }
   }, []);
 
-  /** After mutations, refresh profile without logging out on a single failed /me (avoids false “logged out” after success). */
+  /** Re-read /me after a write without clearing the user on one failure. */
   const softSyncUserFromServer = useCallback(async () => {
     if (!isApiModeEnabled()) return;
     try {
@@ -160,7 +160,7 @@ export const SafeStayProvider = ({ children }) => {
         await refreshMe();
         if (!cancel) await loadListingsFromApi();
       } catch {
-        /* refreshMe/loadListings should not throw; guard anyway */
+        /* guard */
       } finally {
         if (!cancel) setApiReady(true);
       }
@@ -247,14 +247,14 @@ export const SafeStayProvider = ({ children }) => {
         if (res.status === 401) {
           throw new Error(
             data.error ||
-              'Session expired or not recognised. Log out, log in again as a property owner, then publish.'
+              'Not signed in on the server. Log out, log in as an owner, and try again.'
           );
         }
         throw new Error(data.error || data.errors?.[0] || 'Could not create listing.');
       }
       const created = mapApiListingToCard(data.listing);
       if (!created?.id) {
-        throw new Error('Server did not return the new listing. Try again.');
+        throw new Error('Listing was not returned. Retry.');
       }
       setListings((prev) => [created, ...prev]);
       await softSyncUserFromServer();
@@ -363,12 +363,10 @@ export const SafeStayProvider = ({ children }) => {
             }
           }
         } else if (su) {
-          const api = getApiBase() || 'same origin /api (Vite proxy)';
+          const api = getApiBase() || '/api (proxied)';
           throw new Error(
-            'The server accepted your password but your browser did not keep the session cookie. ' +
-              `Use one host for the app and API (e.g. open http://localhost:5173 with VITE_API_BASE_URL matching your API port in .env.development — currently ${api}). ` +
-              'On the API: leave CLIENT_ORIGIN unset for local http:// (or cookies use Secure and are dropped). ' +
-              'Restart the API and npm run dev, then try Log in again.'
+            `Signed in but the session cookie did not stick (API: ${api}). ` +
+              'Match host/port with VITE_API_BASE_URL, avoid mixing localhost and 127.0.0.1, restart API and Vite, then log in again.'
           );
         }
         await loadListingsFromApi();

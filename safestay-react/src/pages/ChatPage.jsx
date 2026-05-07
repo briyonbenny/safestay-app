@@ -4,7 +4,7 @@ import { validateRequired } from '../utils/validation.js';
 import { useSafeStay } from '../context/SafeStayContext.jsx';
 import { apiFetch, isApiModeEnabled } from '../api/safeStayApi.js';
 
-/* Mock mode: short simulated replies (no server). */
+/* Offline demo replies. */
 const REPLY_AS_OWNER = [
   'Thanks for your message. I can share more details or book a viewing when it suits you.',
   'I am still receiving enquiries — the place is open for September. I will reply with photos shortly.',
@@ -15,9 +15,7 @@ const REPLY_AS_STUDENT = [
 ];
 const pickReply = (list) => list[Math.floor(Math.random() * list.length)];
 
-/**
- * True if this message was sent by the logged-in user (API returns from.id; session may only have email until /api/auth/me runs).
- */
+/** Compare sender to the current user (id or email). */
 const isMineMessage = (m, user) => {
   if (!user || !m?.from) return false;
   const fromId = m.from.id;
@@ -25,14 +23,12 @@ const isMineMessage = (m, user) => {
   const fe = m.from.email;
   const ue = user.email;
   if (fe && ue && String(fe).toLowerCase() === String(ue).toLowerCase()) return true;
-  // Mock mode uses from.id = email; API may briefly render before user.id is hydrated from /api/auth/me
+  // Mock threads used email as id until the API fills in Mongo ids.
   if (fromId != null && ue && String(fromId).toLowerCase() === String(ue).toLowerCase()) return true;
   return false;
 };
 
-/**
- * Messages: with VITE_USE_API, real threads via /api/messages; otherwise a short mock chat.
- */
+/** Chat: REST threads/messages when API mode is on. */
 export const ChatPage = () => {
   const { user } = useSafeStay();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -320,9 +316,7 @@ export const ChatPage = () => {
         </p>
       )}
       <p className="lede">
-        Enable the API: in <code>safestay-react/.env</code> set <code>VITE_USE_API=true</code> (this repo
-        includes it), restart <code>npm run dev</code>, and run the Node API in <code>../web technolagy</code>{' '}
-        on port 3000. For a production build, also set <code>VITE_API_BASE_URL</code> to your live API URL.
+        Turn on the backend and set <code>VITE_USE_API</code>; for a hosted build add <code>VITE_API_BASE_URL</code> to your API URL.
       </p>
       <div className="chat-window" role="log">
         {messages.map((m) => {

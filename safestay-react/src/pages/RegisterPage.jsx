@@ -13,7 +13,7 @@ const PREFILL_EMAIL = 'new.user@university.ie';
 const PREFILL_PASSWORD = 'Password1';
 
 /**
- * VIEW: Registration. With VITE_USE_API, uses POST /api/auth/signup (real Mongo account).
+ * Sign-up form; calls POST /api/auth/signup when API mode is on.
  */
 export const RegisterPage = () => {
   const { login, saveAccountRole, applyServerUser } = useSafeStay();
@@ -78,7 +78,7 @@ export const RegisterPage = () => {
           }
           if (!meRes.ok) {
             setError(
-              'Account was created. Open Log in and sign in with your new email and password — if this keeps happening, use http://localhost:5173 and ensure VITE_API_BASE_URL matches in .env.development.'
+              'Account is ready — use Log in with your email and password. If the session fails, check VITE_API_BASE_URL.'
             );
             navigate('/auth/login');
             return;

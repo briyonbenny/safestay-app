@@ -1,5 +1,5 @@
-# When your Git repository root is this folder (safestay-react only), deploy with Blueprint
-# or match these in the Render dashboard. SPA rewrite is required for React Router.
+# If your repo includes the parent folder, use ../render.yaml (adds Node API + VITE_API_BASE_URL link).
+# Static-only repo: create a Render Web Service for ../web technolagy first, then set VITE_API_BASE_URL here.
 # https://render.com/docs/static-sites
 services:
   - type: web
@@ -11,7 +11,7 @@ services:
       - key: VITE_USE_API
         value: "true"
       - key: VITE_API_BASE_URL
-        value: https://YOUR-BACKEND-NAME.onrender.com
+        value: https://YOUR-API-WEB-SERVICE.onrender.com
     routes:
       - type: rewrite
         source: /*

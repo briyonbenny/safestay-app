@@ -36,9 +36,7 @@ function uploadPathsFromFiles(req) {
 
 const DATA_URL_RE = /^data:image\/(jpeg|jpg|pjpeg|png|gif|webp);base64,([\s\S]+)$/i;
 
-/**
- * Persist up to 8 images sent as data URLs in JSON (avoids multipart + dev proxy losing session cookies).
- */
+/** Decode data URLs and write files under public/uploads/listings. */
 function saveDataUrlListingImages(dataUrls) {
   if (!Array.isArray(dataUrls) || !dataUrls.length) return [];
   const out = [];

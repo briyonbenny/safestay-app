@@ -1,4 +1,4 @@
-// Main server setup for SafeStay Assignment 2 (Node + Express).
+// SafeStay — Express entrypoint.
 require("dotenv").config();
 
 const path = require("path");
@@ -21,28 +21,24 @@ const { attachCurrentUser } = require("./middleware/auth");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Render sits behind a reverse proxy; needed for correct secure cookies and IPs.
+// Behind a reverse proxy (e.g. hosted deploy) — trust X-Forwarded-* for cookies and IP.
 app.set("trust proxy", 1);
 
-// Render/production: set MONGODB_URI in the dashboard; .env is not deployed.
 const mongoUri = (process.env.MONGODB_URI || "").trim().replace(/^['"]|['"]$/g, "");
 if (!mongoUri) {
   // eslint-disable-next-line no-console
-  console.error(
-    "FATAL: MONGODB_URI is not set. In Render: open this Web Service → Environment → add MONGODB_URI (your Atlas connection string) → Save."
-  );
+  console.error("FATAL: MONGODB_URI is missing. Add it in your host’s env settings (or local .env).");
   process.exit(1);
 }
 
-// Configure view engine for server-rendered pages (before listen).
+// EJS for legacy HTML routes.
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
 function registerRoutes() {
-  // Make authenticated user/session data available to all templates.
   app.use(attachCurrentUser);
 
-  // Avoid stale HTML in the browser during development (EJS updates not visible otherwise).
+  // Stop caching HTML in dev so template edits show up.
   app.use((req, res, next) => {
     if (req.method !== "GET") return next();
     if ((req.originalUrl || "").split("?")[0].startsWith("/api")) return next();
@@ -65,7 +61,7 @@ function registerRoutes() {
   app.get("/api", (req, res) => {
     res.status(200).json({
       name: "SafeStay API",
-      hint: "Try GET /api/listings for JSON listings.",
+      hint: "GET /api/listings",
       routes: ["/api/auth", "/api/listings", "/api/messages/threads", "/api/messages", "/health"],
     });
   });
@@ -94,12 +90,11 @@ function createSessionStore() {
   if (client && dbName) {
     return MongoStore.create({ ...base, client, dbName });
   }
-  // getClient() can be missing in some driver/Mongoose combos — connect-mongo needs a real mongoUrl
   if (!mongoUri) {
     throw new Error("MONGODB_URI is required to create the session store.");
   }
   // eslint-disable-next-line no-console
-  console.warn("session store: using mongoUrl (Mongoose client not exposed); extra DB connection to Atlas");
+  console.warn("session store: falling back to mongoUrl string");
   return MongoStore.create({ ...base, mongoUrl: mongoUri });
 }
 
@@ -109,7 +104,7 @@ async function start() {
   const nodeEnv = process.env.NODE_ENV || "development";
   const isProd = nodeEnv === "production";
 
-  /** Multiple frontends (Render static + local Vite): comma-separated, no trailing slash. */
+  // CLIENT_ORIGIN: comma-separated list, no trailing slash.
   const clientOrigins = (process.env.CLIENT_ORIGIN || "")
     .split(",")
     .map((s) => s.trim().replace(/\/$/, ""))
@@ -118,11 +113,7 @@ async function start() {
     String(process.env.CORS_ALLOW_LOCALHOST || "").toLowerCase() === "true" ||
     String(process.env.CORS_ALLOW_LOCALHOST || "") === "1";
 
-  /**
-   * SameSite=None + Secure is only valid on https. If CLIENT_ORIGIN is set while developing on http://localhost,
-   * forcing Secure makes the browser drop the session cookie — login looks OK but GET /api/auth/me returns 401.
-   * Apply cross-site session rules only in production.
-   */
+  // Prod + explicit front-end origins: use cross-site cookie rules (None + Secure on https).
   const crossSiteSession = clientOrigins.length > 0 && isProd;
   const sessionCookieSecure =
     crossSiteSession ||
@@ -136,10 +127,6 @@ async function start() {
     );
   }
 
-  /**
-   * CORS: explicit CLIENT_ORIGIN list (e.g. Render site + optional http://localhost:5173), or dev defaults.
-   * Set CORS_ALLOW_LOCALHOST=true on the API (e.g. Render) to allow local Vite without listing every port.
-   */
   function corsOrigin() {
     if (clientOrigins.length > 0) {
       return (origin, cb) => {
@@ -163,10 +150,10 @@ async function start() {
 
   if (clientOrigins.length > 0) {
     // eslint-disable-next-line no-console
-    console.log(`CORS: allowing origins: ${clientOrigins.join(", ")}${allowLocalhostCors ? " + localhost/127.0.0.1 (http)" : ""}`);
+    console.log(`cors allow: ${clientOrigins.join(", ")}${allowLocalhostCors ? " ; +loopback http" : ""}`);
   }
 
-  // CORS first (preflight), then cookies + session before body parsers (recommended for express-session).
+  // Order: cors → cookies → session → parsers.
   app.use(
     cors({
       origin: corsOrigin(),
@@ -187,7 +174,6 @@ async function start() {
       cookie: {
         httpOnly: true,
         path: "/",
-        // Deployed static site on another origin needs SameSite=None + Secure (production only; see crossSiteSession).
         sameSite: crossSiteSession ? "none" : "lax",
         secure: sessionCookieSecure,
         maxAge: 1000 * 60 * 60 * 24, // 1 day

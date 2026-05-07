@@ -5,7 +5,7 @@ import { publicImageUrl } from '../api/safeStayApi.js';
 import { validateRequired } from '../utils/validation.js';
 
 /**
- * VIEW: Listing detail, report, owner delete, link to real chat (API) or mock flow.
+ * Listing view: photos, favourite, delete for owner, link into chat.
  */
 export const ListingDetailPage = () => {
   const { id } = useParams();
@@ -64,7 +64,7 @@ export const ListingDetailPage = () => {
     }
   };
 
-  // Do not require user.id: sessions from localStorage may not have `id` until /api/auth/me
+  // Owner check may use email until /me returns an id.
   // returns; the link was incorrectly pointing to /auth/login even for logged-in students.
   const chatTo = isOwner
     ? '/chat'

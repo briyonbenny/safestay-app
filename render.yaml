@@ -1,10 +1,33 @@
-# If this Git repository root is "GroupSafeStayAssignment2SafeStay" (this folder), use this
-# in Render: Blueprints → New Blueprint Instance, or add file at repo root.
-# If your Git repo is ONLY the "safestay-react" folder, use safestay-react/render.yaml instead.
+# Render Blueprint — SafeStay needs TWO services:
+#  1) safestay-api  → Node/Express (../web technolagy) — serves /api/*
+#  2) safestay      → Static Vite build — only HTML/JS/CSS (no API)
 #
-# Docs: https://render.com/docs/static-sites
-# Replace VITE_API_BASE_URL with your actual Render Web Service URL (Node API), then redeploy, or set both vars in the dashboard instead.
+# After the first successful deploy, open the safestay-api service → Environment and set:
+#   CLIENT_ORIGIN = your static site URL (e.g. https://safestay-app-e458.onrender.com)
+# so session cookies work when the API and site are on different *.onrender.com hosts.
+# Also set MONGODB_URI on safestay-api (MongoDB Atlas). Redeploy the API after changing env.
+#
+# Docs: https://render.com/docs/blueprint-spec
 services:
+  # ---- Backend (required for login, listings, chat) ----
+  - type: web
+    name: safestay-api
+    runtime: node
+    rootDir: "web technolagy"
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      # Set manually after static site URL is known (see file header).
+      - key: CLIENT_ORIGIN
+        sync: false
+
+  # ---- Frontend (CDN static files only) ----
   - type: web
     name: safestay
     runtime: static
@@ -15,7 +38,10 @@ services:
       - key: VITE_USE_API
         value: "true"
       - key: VITE_API_BASE_URL
-        value: https://YOUR-BACKEND-NAME.onrender.com
+        fromService:
+          name: safestay-api
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
     routes:
       - type: rewrite
         source: /*

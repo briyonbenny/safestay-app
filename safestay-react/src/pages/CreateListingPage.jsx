@@ -13,12 +13,12 @@ const PREFILL_DESC =
   'Furnished single room in a quiet home. 15 minutes to campus by bus, shared living room and high-speed internet.';
 
 /**
- * VIEW: New property. Optional photos (up to 8) when using the real API; mock can attach previews.
+ * New listing form (mock or API).
  */
 export const CreateListingPage = () => {
   const { user, addListing, apiMode, apiReady, logout } = useSafeStay();
   const nav = useNavigate();
-  /** API: confirm /api/auth/me sees an owner — localStorage alone is not enough (avoids false "owner" + 401 on publish). */
+  /** Extra check: server must see an owner, not only localStorage. */
   const [ownerServerGate, setOwnerServerGate] = useState(() => (isApiModeEnabled() ? 'checking' : 'ok'));
   const [title, setTitle] = useState(PREFILL_TITLE);
   const [location, setLocation] = useState(PREFILL_LOCATION);
@@ -77,7 +77,7 @@ export const CreateListingPage = () => {
     return (
       <div className="page form-page">
         <h1>Add a property</h1>
-        <p className="form-page__intro">Checking your session with the server…</p>
+        <p className="form-page__intro">Checking session…</p>
       </div>
     );
   }
@@ -99,7 +99,7 @@ export const CreateListingPage = () => {
     return (
       <div className="page form-page">
         <h1>Add a property</h1>
-        <p className="form-page__intro">Checking your account with the server…</p>
+        <p className="form-page__intro">Checking your account…</p>
       </div>
     );
   }
@@ -109,9 +109,8 @@ export const CreateListingPage = () => {
       <div className="page form-page">
         <h1>Add a property</h1>
         <p className="form-error" role="alert">
-          The server does not have an active owner session for this browser. Log out, then log in again as a
-          <strong> property owner</strong>. Use one address only (e.g. <code>http://localhost:5173</code>, not{' '}
-          <code>127.0.0.1</code>). Start the API in <code>../web technolagy</code> with <code>npm start</code>.
+          No owner session on the server. Log out and sign in again as a host. Keep one hostname (e.g.{' '}
+          <code>localhost</code> vs <code>127.0.0.1</code>) and make sure the API process is running.
         </p>
         <p>
           <Link to="/auth/login">Log in</Link> · <Link to="/">Home</Link>
@@ -169,7 +168,7 @@ export const CreateListingPage = () => {
           }
           setError(
             d.error ||
-              'Could not verify your session. Is the API running on port 3000? Restart npm run dev after starting the API.'
+              'Session check failed. Confirm the API is up and restart the dev server if you changed env.'
           );
           return;
         }

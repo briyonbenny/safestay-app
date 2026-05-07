@@ -1,4 +1,4 @@
-// JSON API routes for authentication (session cookie, not JWT).
+// Auth API — session in a cookie.
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
@@ -16,11 +16,7 @@ function publicUser(userDoc) {
   };
 }
 
-/**
- * Persist session before sending JSON so MongoStore has finished writing
- * before the next request (fixes "logged in then immediately logged out").
- * We avoid session.regenerate() here — it can confuse some dev proxies / browsers with Set-Cookie.
- */
+/** Save session to the store, then send JSON (keeps the next request seeing the same session). */
 function commitAuthSession(req, res, userDoc, statusCode, jsonBody) {
   req.session.user = {
     id: userDoc._id,

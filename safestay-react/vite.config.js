@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
-/** Same host/port as VITE_API_BASE_URL when set; else default API port from app.js (3000). */
+/** Build-time API root; Vite proxy uses the same when set. */
 function apiProxyTarget(env) {
   const base = String(env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '')
   if (base) {

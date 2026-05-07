@@ -8,9 +8,7 @@ import { isApiModeEnabled } from '../api/safeStayApi.js';
 const PREFILL_EMAIL = 'student@university.ie';
 const PREFILL_PASSWORD = 'Password1';
 
-/**
- * VIEW: Sign-in. Client-side validation; with VITE_USE_API, calls POST /api/auth/login.
- */
+/** Login form; POST /api/auth/login when API mode is on. */
 export const LoginPage = () => {
   const { login, getRoleForEmail } = useSafeStay();
   const navigate = useNavigate();
